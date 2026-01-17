@@ -1,0 +1,21 @@
+/* assets/css/custom.css */
+:root{
+  --brand: #6aa7ff;
+}
+.badge-brand{
+  background: rgba(106,167,255,.15);
+  color: #1b4fa3;
+  border: 1px solid rgba(106,167,255,.35);
+}
+.card{
+  border-radius: 16px;
+}
+.btn-brand{
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #0b1020;
+  font-weight: 600;
+}
+.btn-brand:hover{
+  filter: brightness(.95);
+}
