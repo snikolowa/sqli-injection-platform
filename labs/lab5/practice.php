@@ -5,6 +5,7 @@ require_login();
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
+require_once __DIR__ . '/../../includes/modules.php';
 
 $LAB_CODE = "LAB5_TIME_BASED";
 $userId = (int)($_SESSION['user_id'] ?? 0);
@@ -13,6 +14,7 @@ require_prereq_or_block($conn, $userId, 'LAB4_ERROR_BASED');
 $message = "";
 $resultLabel = "";
 $completedNow = false;
+$next = get_next_module($LAB_CODE);
 
 $condition = "";
 
@@ -25,25 +27,19 @@ function normalize_condition(string $s): string {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $condition = trim($_POST['condition'] ?? '');
 
-    // УЯЗВИМА: директно вграждане на условие в SQL
-    // Идея: ако условието е вярно => SLEEP(2), иначе 0
     $sql = "SELECT IF(($condition), SLEEP(2), 0) AS r";
 
     $start = microtime(true);
     $res = mysqli_query($conn, $sql);
     $elapsed = microtime(true) - $start;
-
-    // праг за “забавено” (2 секунди sleep + overhead)
     $isDelayed = ($elapsed >= 1.6);
 
     if ($res) {
         $resultLabel = $isDelayed ? "DELAYED ✅" : "NO DELAY ❌";
     } else {
-        // ако условието е невалидно, пак показваме, че има грешка (но без детайли)
         $resultLabel = "SQL ERROR (невалидно условие)";
     }
 
-    // Условие за “решено”: проверка на първия символ на admin паролата = 'a'
     $norm = normalize_condition($condition);
     $looksRight =
         str_contains($norm, "substring(password,1,1)='a'") ||
@@ -72,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_close($stmtLog);
     }
 
-    // user_progress
     if ($completedNow && $userId > 0) {
         $stmt = mysqli_prepare($conn, "
             INSERT INTO user_progress (user_id, lab_code, completed, completed_at)
@@ -190,8 +185,20 @@ bs_layout_start('Lab 5 – Practice');
 
     <?php if ($completedNow): ?>
       <div class="alert alert-success mt-4">
-        ✅ Модул 5 е успешно завършен и е записан в профила ти.
+        ✅ Модулът е успешно завършен и е записан в профила ти.
       </div>
+
+        <?php if (!empty($next)): ?>
+          <div class="d-flex justify-content-end mt-3">
+            <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
+              Към <?php echo htmlspecialchars($next['label']); ?> →
+            </a>
+          </div>
+        <?php else: ?>
+          <div class="alert alert-info mt-3 mb-0">
+            🎉 Това беше последният модул!
+          </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <div class="small text-secondary mt-4">

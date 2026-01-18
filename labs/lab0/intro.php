@@ -5,10 +5,6 @@ require_login();
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 
-/**
- * LAB 0 – Intro
- * Отбелязва се като completed при първо отваряне
- */
 $LAB_CODE = "LAB0_INTRO";
 $userId = (int)($_SESSION['user_id'] ?? 0);
 

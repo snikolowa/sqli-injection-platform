@@ -8,7 +8,6 @@ require_once __DIR__ . '/../../includes/layout_bs.php';
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
 
-// Lab 3 е заключен, ако Lab 2 не е Completed
 require_prereq_or_block($conn, $userId, 'LAB2_BOOLEAN_BLIND');
 
 bs_layout_start('Lab 3 – UNION-based SQL Injection (Step 1)');

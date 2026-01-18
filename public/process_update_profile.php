@@ -5,10 +5,8 @@ require_login();
 require_once __DIR__ . '/../includes/db.php';
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
-
 $firstName = trim($_POST['first_name'] ?? '');
 $lastName  = trim($_POST['last_name'] ?? '');
-
 $firstName = preg_replace('/\s+/', ' ', $firstName);
 $lastName  = preg_replace('/\s+/', ' ', $lastName);
 

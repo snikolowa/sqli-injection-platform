@@ -5,6 +5,7 @@ require_login();
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
+require_once __DIR__ . '/../../includes/modules.php';
 
 $LAB_CODE = "LAB2_BOOLEAN_BLIND";
 $userId = (int)($_SESSION['user_id'] ?? 0);
@@ -13,6 +14,7 @@ require_prereq_or_block($conn, $userId, 'LAB1_AUTH_BYPASS');
 $message = "";
 $resultLabel = "";
 $completedNow = false;
+$next = get_next_module($LAB_CODE);
 
 $condition = "";
 
@@ -25,7 +27,6 @@ function normalize_condition(string $s): string {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $condition = trim($_POST['condition'] ?? '');
 
-    // УЯЗВИМА: директно вграждане на условие (учебна среда)
     $sql = "SELECT IF(($condition), 1, 0) AS ok";
     $res = mysqli_query($conn, $sql);
 
@@ -39,9 +40,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $resultLabel = "FALSE ❌";
         }
 
-        // Условие за “решено” (учебна цел):
-        // Потвърждаваме, че LENGTH(admin password) = 8
-        // (админ паролата в твоята база е admin123 -> 8 символа)
         $norm = normalize_condition($condition);
         $looksRight =
             str_contains($norm, "length(") &&
@@ -60,7 +58,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "Резултат: $resultLabel";
     }
 
-    // Логване (attempts)
     $lab = "lab2_practice";
     $mode = "vuln";
     $successInt = $completedNow ? 1 : 0;
@@ -76,7 +73,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_close($stmtLog);
     }
 
-    // user_progress
     if ($completedNow && $userId > 0) {
         $stmt = mysqli_prepare($conn, "
             INSERT INTO user_progress (user_id, lab_code, completed, completed_at)
@@ -198,8 +194,20 @@ bs_layout_start('Lab 2 – Practice');
 
     <?php if ($completedNow): ?>
       <div class="alert alert-success mt-4">
-        ✅ Модул 2 е завършен и прогресът е записан в профила ти.
+        ✅ Модулът е успешно завършен и е записан в профила ти.
       </div>
+
+        <?php if (!empty($next)): ?>
+          <div class="d-flex justify-content-end mt-3">
+            <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
+              Към <?php echo htmlspecialchars($next['label']); ?> →
+            </a>
+          </div>
+        <?php else: ?>
+          <div class="alert alert-info mt-3 mb-0">
+            🎉 Това беше последният модул!
+          </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <div class="small text-secondary mt-4">

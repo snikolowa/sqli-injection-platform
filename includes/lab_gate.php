@@ -1,13 +1,9 @@
 <?php
-// includes/lab_gate.php
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-/**
- * Проверява дали lab е completed
- */
 function is_lab_completed(mysqli $conn, int $userId, string $labCode): bool {
     $stmt = mysqli_prepare(
         $conn,
@@ -28,9 +24,6 @@ function is_lab_completed(mysqli $conn, int $userId, string $labCode): bool {
     return $done;
 }
 
-/**
- * Блокира достъпа, ако prerequisite не е завършен
- */
 function require_prereq_or_block(
     mysqli $conn,
     int $userId,

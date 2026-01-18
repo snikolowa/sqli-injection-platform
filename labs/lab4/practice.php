@@ -5,11 +5,13 @@ require_login();
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
+require_once __DIR__ . '/../../includes/modules.php';
 
-$LAB_CODE = "LAB4_ERROR_BASED"; // <-- смени ако имаш конкретен код, напр. LAB4_SOMETHING
+$LAB_CODE = "LAB4_ERROR_BASED"; 
 
 $message = "";
 $completedNow = false;
+$next = get_next_module($LAB_CODE);
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
 require_prereq_or_block($conn, $userId, 'LAB3_UNION_BASED');
@@ -17,31 +19,15 @@ require_prereq_or_block($conn, $userId, 'LAB3_UNION_BASED');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $input = $_POST['input'] ?? '';
 
-    /**
-     * =========================
-     * TODO: Lab4 уязвима логика
-     * =========================
-     * Замени този SQL с реалния от Lab4.
-     * Идеята е умишлено да е vuln (както при Lab1).
-     */
-    $sql = "SELECT * FROM users WHERE username = '$input'"; // <-- примерна рамка
+    $sql = "SELECT * FROM users WHERE username = '$input'"; 
     $result = mysqli_query($conn, $sql);
 
-    /**
-     * =========================
-     * TODO: Критерий за успех
-     * =========================
-     * Определи какво значи “минато” за Lab4.
-     * Пример: ако върне admin ред / ако върне повече от 1 ред / ако върне специфично поле и т.н.
-     */
     if ($result && mysqli_num_rows($result) > 0) {
         $message = "✅ Има резултат. Провери дали покри целта на Lab 4.";
-        // $completedNow = true; // <-- активирай когато имаш ясен критерий
     } else {
         $message = "Няма резултат или неуспешен опит.";
     }
 
-    // ЛОГВАНЕ (attempts)
     $lab = "lab4_practice";
     $mode = "vuln";
     $successInt = $completedNow ? 1 : 0;
@@ -52,13 +38,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          VALUES (?, ?, ?, ?)"
     );
     if ($stmtLog) {
-        // използваме username_input като generic поле за входа
         mysqli_stmt_bind_param($stmtLog, "sssi", $lab, $mode, $input, $successInt);
         mysqli_stmt_execute($stmtLog);
         mysqli_stmt_close($stmtLog);
     }
 
-    // user_progress
     if ($completedNow && $userId > 0) {
         $stmt = mysqli_prepare($conn, "
             INSERT INTO user_progress (user_id, lab_code, completed, completed_at)
@@ -184,8 +168,20 @@ bs_layout_start('Lab 4 – Practice');
 
     <?php if ($completedNow): ?>
       <div class="alert alert-success mt-4">
-        ✅ Модул 4 е успешно завършен и е записан в профила ти.
+        ✅ Модулът е успешно завършен и е записан в профила ти.
       </div>
+
+        <?php if (!empty($next)): ?>
+          <div class="d-flex justify-content-end mt-3">
+            <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
+              Към <?php echo htmlspecialchars($next['label']); ?> →
+            </a>
+          </div>
+        <?php else: ?>
+          <div class="alert alert-info mt-3 mb-0">
+            🎉 Това беше последният модул!
+          </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <div class="small text-secondary mt-4">

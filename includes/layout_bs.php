@@ -1,5 +1,4 @@
 <?php
-// includes/layout_bs.php
 
 function bs_layout_start(string $title): void {
   if (session_status() === PHP_SESSION_NONE) {
@@ -19,7 +18,6 @@ function bs_layout_start(string $title): void {
     <!-- Bootstrap 5 (CDN) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <!-- Custom стил -->
     <link href="<?php echo $base; ?>/assets/css/custom.css" rel="stylesheet">
   </head>
   <body class="bg-light">

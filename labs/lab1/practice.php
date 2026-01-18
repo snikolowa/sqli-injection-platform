@@ -5,11 +5,13 @@ require_login();
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
+require_once __DIR__ . '/../../includes/modules.php';
 
 $LAB_CODE = "LAB1_AUTH_BYPASS";
 
 $message = "";
 $completedNow = false;
+$next = get_next_module($LAB_CODE);
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
 
@@ -19,7 +21,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = $_POST['username'] ?? '';
     $password = $_POST['password'] ?? '';
 
-    // ❌ УЯЗВИМА SQL ЗАЯВКА (умишлено)
     $sql = "SELECT * FROM users WHERE username = '$username' AND password = '$password'";
     $result = mysqli_query($conn, $sql);
 
@@ -36,7 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "Невалидни данни или неуспешен опит.";
     }
 
-    // ЛОГВАНЕ (attempts)
     $lab = "lab1_practice";
     $mode = "vuln";
     $successInt = $completedNow ? 1 : 0;
@@ -52,7 +52,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_close($stmtLog);
     }
 
-    // user_progress
     if ($completedNow && $userId > 0) {
         $stmt = mysqli_prepare($conn, "
             INSERT INTO user_progress (user_id, lab_code, completed, completed_at)
@@ -201,8 +200,20 @@ bs_layout_start('Lab 1 – Practice');
 
     <?php if ($completedNow): ?>
       <div class="alert alert-success mt-4">
-        ✅ Модул 1 е успешно завършен и е записан в профила ти.
+        ✅ Модулът е успешно завършен и е записан в профила ти.
       </div>
+
+        <?php if (!empty($next)): ?>
+          <div class="d-flex justify-content-end mt-3">
+            <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
+              Към <?php echo htmlspecialchars($next['label']); ?> →
+            </a>
+          </div>
+        <?php else: ?>
+          <div class="alert alert-info mt-3 mb-0">
+            🎉 Това беше последният модул!
+          </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <div class="small text-secondary mt-4">

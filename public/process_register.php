@@ -12,16 +12,10 @@ $passwordConfirm = $_POST['password_confirm'] ?? '';
 $firstName = trim($_POST['first_name'] ?? '');
 $lastName  = trim($_POST['last_name'] ?? '');
 $email     = trim($_POST['email'] ?? '');
-
-/**
- * Нормализация
- */
 $username = preg_replace('/\s+/', ' ', $username);
 $username = mb_strtolower($username, 'UTF-8');
-
 $email = mb_strtolower($email, 'UTF-8');
 $email = preg_replace('/\s+/', '', $email);
-
 $firstName = preg_replace('/\s+/', ' ', $firstName);
 $lastName  = preg_replace('/\s+/', ' ', $lastName);
 
@@ -45,9 +39,6 @@ if (mb_strlen($username, 'UTF-8') < 3 || strlen($password) < 6) {
     exit;
 }
 
-/**
- * Проверка: username зает?
- */
 $stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE username = ?");
 if (!$stmt) {
     header("Location: register.php?error=DB грешка");
@@ -68,9 +59,6 @@ if (mysqli_stmt_num_rows($stmt) > 0) {
 }
 mysqli_stmt_close($stmt);
 
-/**
- * Проверка: email зает?
- */
 $stmt = mysqli_prepare($conn, "SELECT id FROM users WHERE email = ?");
 if (!$stmt) {
     header("Location: register.php?error=DB грешка");
@@ -91,9 +79,6 @@ if (mysqli_stmt_num_rows($stmt) > 0) {
 }
 mysqli_stmt_close($stmt);
 
-/**
- * Insert
- */
 $hash = password_hash($password, PASSWORD_DEFAULT);
 
 $stmt = mysqli_prepare(

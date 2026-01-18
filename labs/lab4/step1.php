@@ -8,7 +8,6 @@ require_once __DIR__ . '/../../includes/layout_bs.php';
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
 
-// Модул 4 е заключен, ако Модул 3 не е завършен
 require_prereq_or_block($conn, $userId, 'LAB3_UNION_BASED');
 
 bs_layout_start('Модул 4 – Error-based SQL Injection (Урок)');

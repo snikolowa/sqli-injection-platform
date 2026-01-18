@@ -8,9 +8,6 @@ require_once __DIR__ . '/../includes/db.php';
 $username = trim($_POST['username'] ?? '');
 $password = $_POST['password'] ?? '';
 
-/**
- * Същата нормализация като при регистрацията
- */
 $username = preg_replace('/\s+/', ' ', $username);
 $username = mb_strtolower($username, 'UTF-8');
 

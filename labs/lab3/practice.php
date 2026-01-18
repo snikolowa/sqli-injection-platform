@@ -5,6 +5,7 @@ require_login();
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
+require_once __DIR__ . '/../../includes/modules.php';
 
 $LAB_CODE = "LAB3_UNION_BASED";
 $userId = (int)($_SESSION['user_id'] ?? 0);
@@ -14,11 +15,11 @@ $q = '';
 $message = '';
 $completedNow = false;
 $rows = [];
+$next = get_next_module($LAB_CODE);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $q = trim($_POST['q'] ?? '');
 
-    // ❌ УЯЗВИМА търсачка (умишлено): директно вграждане в LIKE
     $sql = "SELECT name, description FROM products WHERE name LIKE '%$q%'";
     $res = mysqli_query($conn, $sql);
 
@@ -33,7 +34,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Намерени резултати: " . count($rows);
         }
 
-        // Условие за успех: появява се "admin" в някоя клетка
         foreach ($rows as $r) {
             $n = strtolower((string)($r['name'] ?? ''));
             $d = strtolower((string)($r['description'] ?? ''));
@@ -45,11 +45,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
     } else {
-        // В този lab НЕ показваме SQL error детайли към потребителя
         $message = "Възникна грешка при търсенето. Опитай с различна заявка.";
     }
 
-    // Логване (attempts)
     $lab = "lab3_practice";
     $mode = "vuln";
     $successInt = $completedNow ? 1 : 0;
@@ -65,7 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         mysqli_stmt_close($stmtLog);
     }
 
-    // user_progress
     if ($completedNow && $userId > 0) {
         $stmt = mysqli_prepare($conn, "
             INSERT INTO user_progress (user_id, lab_code, completed, completed_at)
@@ -205,8 +202,20 @@ bs_layout_start('Lab 3 – Practice');
 
     <?php if ($completedNow): ?>
       <div class="alert alert-success mt-4">
-        ✅ Модул 3 е завършен и прогресът е записан в профила ти.
+        ✅ Модулът е успешно завършен и е записан в профила ти.
       </div>
+
+        <?php if (!empty($next)): ?>
+          <div class="d-flex justify-content-end mt-3">
+            <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
+              Към <?php echo htmlspecialchars($next['label']); ?> →
+            </a>
+          </div>
+        <?php else: ?>
+          <div class="alert alert-info mt-3 mb-0">
+            🎉 Това беше последният модул!
+          </div>
+        <?php endif; ?>
     <?php endif; ?>
 
     <div class="small text-secondary mt-4">
