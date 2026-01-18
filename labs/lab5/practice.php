@@ -1,15 +1,14 @@
 <?php
-ini_set('display_errors', 1);        // махни след тестване
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 require_once __DIR__ . '/../../includes/auth.php';
 require_login();
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/lab_gate.php';
+require_once __DIR__ . '/../../includes/layout_bs.php';
 
 $LAB_CODE = "LAB5_TIME_BASED";
 $userId = (int)($_SESSION['user_id'] ?? 0);
+require_prereq_or_block($conn, $userId, 'LAB4_ERROR_BASED');
 
 $message = "";
 $resultLabel = "";
@@ -45,7 +44,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Условие за “решено”: проверка на първия символ на admin паролата = 'a'
-    // (приемаме няколко еквивалентни имена на функцията)
     $norm = normalize_condition($condition);
     $looksRight =
         str_contains($norm, "substring(password,1,1)='a'") ||
@@ -58,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "Резултат: $resultLabel (време: " . number_format($elapsed, 3) . "s)";
     }
 
-    // Логване (attempts) — записваме входа като текст
+    // Логване (attempts)
     $lab = "lab5_practice";
     $mode = "vuln";
     $successInt = $completedNow ? 1 : 0;
@@ -88,48 +86,119 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+bs_layout_start('Lab 5 – Practice');
 ?>
-<!DOCTYPE html>
-<html lang="bg">
-<head>
-  <meta charset="UTF-8" />
-  <title>Lab 5 - Practice</title>
-</head>
-<body>
-  <nav>
-    <a href="/sqli-platform/public/dashboard.php">Dashboard</a> |
-    <a href="/sqli-platform/labs/lab5/step1.php">Step 1</a> |
-    <a href="/sqli-platform/labs/lab5/step2.php">Step 2</a> |
-    <a href="/sqli-platform/public/profile.php">Профил</a> |
-    <a href="/sqli-platform/public/logout.php">Logout</a>
-  </nav>
 
-  <h1>Lab 5: Practice – Time-based Blind SQL Injection</h1>
+<div class="card shadow-sm">
+  <div class="card-body">
 
-  <p>
-    <strong>Задача:</strong> Потвърди чрез time-based подход, че
-    <strong>първият символ на паролата на admin е 'a'</strong>.
-    Платформата ще покаже само дали има забавяне.
-  </p>
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
+      <div>
+        <h1 class="h4 fw-bold mb-1">Модул 5: Practice – Time-based Blind SQL Injection</h1>
+        <p class="text-secondary mb-0">
+          Задача: потвърди чрез time-based подход, че <strong>първият символ на паролата на admin е 'a'</strong>.
+          Платформата показва само дали има забавяне.
+        </p>
+      </div>
+      <span class="badge text-bg-primary rounded-pill">Модул 5</span>
+    </div>
 
-  <?php if ($message): ?>
-    <p><strong><?php echo htmlspecialchars($message); ?></strong></p>
-  <?php endif; ?>
-
-  <form method="post" autocomplete="off">
-    <label>Въведи SQL условие:</label><br>
-    <input type="text" name="condition" value="<?php echo htmlspecialchars($condition); ?>" required style="width: 520px;"><br><br>
-    <button type="submit">Test Condition</button>
-  </form>
-
-  <?php if ($completedNow): ?>
     <hr>
-    <h2>✅ Lab 5 – Completed</h2>
-    <p>Задачата е отбелязана като мината и се вижда в профила ти.</p>
-  <?php endif; ?>
 
-  <p style="margin-top:16px;">
-    Забележка: Лабораторията е умишлено уязвима и е предназначена само за учебни цели.
-  </p>
-</body>
-</html>
+    <!-- Navigation -->
+    <div class="btn-group mb-3" role="group">
+      <a class="btn btn-outline-primary" href="step1.php">Урок</a>
+      <a class="btn btn-outline-primary" href="step2.php">Примери</a>
+      <a class="btn btn-success" href="practice.php">Упражнение</a>
+    </div>
+
+    <?php if ($message): ?>
+      <div class="alert <?php echo $completedNow ? 'alert-success' : 'alert-secondary'; ?>">
+        <?php echo htmlspecialchars($message); ?>
+      </div>
+    <?php endif; ?>
+
+    <!-- Form -->
+    <form method="post" class="row g-3 mt-2" autocomplete="off">
+      <div class="col-12">
+        <label class="form-label">Въведи SQL условие</label>
+        <input
+          type="text"
+          name="condition"
+          class="form-control"
+          value="<?php echo htmlspecialchars($condition); ?>"
+          required
+        >
+        <div class="form-text">
+          Подай условие, което се оценява в SQL. Приложението отчита дали има забавяне.
+        </div>
+      </div>
+
+      <div class="col-12 d-flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-brand">Провери</button>
+      </div>
+    </form>
+
+    <!-- Optional hints (като Lab1) -->
+    <div class="mt-4">
+      <button class="btn btn-outline-info"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#hintsSection"
+              aria-expanded="false"
+              aria-controls="hintsSection">
+        💡 Покажи подсказки
+      </button>
+    </div>
+
+    <div class="collapse mt-3" id="hintsSection">
+      <div class="accordion" id="lab5Hints">
+
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#lab5_hint1">
+              Подсказка 1: Какво измерваме?
+            </button>
+          </h2>
+          <div id="lab5_hint1" class="accordion-collapse collapse" data-bs-parent="#lab5Hints">
+            <div class="accordion-body text-secondary">
+              Ако условието е вярно, заявката умишлено забавя отговора (sleep). Ако е невярно — няма забавяне.
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#lab5_hint2">
+              Подсказка 2: Какво трябва да “потвърдиш”?
+            </button>
+          </h2>
+          <div id="lab5_hint2" class="accordion-collapse collapse" data-bs-parent="#lab5Hints">
+            <div class="accordion-body text-secondary">
+              Условието трябва да е формулирано така, че да проверява първия символ от паролата на admin.
+              При успех ще видиш DELAYED и lab-ът ще се маркира като Completed.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <?php if ($completedNow): ?>
+      <div class="alert alert-success mt-4">
+        ✅ Модул 5 е успешно завършен и е записан в профила ти.
+      </div>
+    <?php endif; ?>
+
+    <div class="small text-secondary mt-4">
+      ⚠️ Тази страница е умишлено уязвима и е предназначена само за учебни цели.
+    </div>
+
+  </div>
+</div>
+
+<?php bs_layout_end(); ?>

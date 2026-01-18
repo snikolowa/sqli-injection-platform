@@ -2,7 +2,12 @@
 // includes/layout_bs.php
 
 function bs_layout_start(string $title): void {
+  if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+  }
+
   $base = '/sqli-platform';
+  $loggedIn = !empty($_SESSION['user_id']);
   ?>
   <!doctype html>
   <html lang="bg">
@@ -14,24 +19,45 @@ function bs_layout_start(string $title): void {
     <!-- Bootstrap 5 (CDN) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <!-- Малко custom стил -->
+    <!-- Custom стил -->
     <link href="<?php echo $base; ?>/assets/css/custom.css" rel="stylesheet">
   </head>
   <body class="bg-light">
 
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-dark">
     <div class="container">
-      <a class="navbar-brand fw-bold" href="<?php echo $base; ?>/public/dashboard.php">SQLi Platform</a>
+      <a class="navbar-brand fw-bold" href="<?php echo $base; ?>/public/index.php">SQLi Platform</a>
+
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
         <span class="navbar-toggler-icon"></span>
       </button>
 
       <div class="collapse navbar-collapse" id="nav">
         <ul class="navbar-nav ms-auto gap-1">
-          <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/public/dashboard.php">Dashboard</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/public/profile.php">Профил</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/labs/lab0/intro.php">Урок 0</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?php echo $base; ?>/public/logout.php">Logout</a></li>
+
+          <?php if ($loggedIn): ?>
+            <li class="nav-item">
+              <a class="nav-link" href="<?php echo $base; ?>/public/dashboard.php">Табло</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="<?php echo $base; ?>/public/profile.php">Профил</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="<?php echo $base; ?>/public/logout.php">Изход</a>
+            </li>
+          <?php else: ?>
+            <li class="nav-item">
+              <a class="nav-link" href="<?php echo $base; ?>/public/index.php">Начало</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="<?php echo $base; ?>/public/labs.php">Модули</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="<?php echo $base; ?>/public/login.php">Вход</a>
+            </li>
+
+          <?php endif; ?>
+
         </ul>
       </div>
     </div>

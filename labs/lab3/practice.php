@@ -3,10 +3,12 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_login();
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 
 $LAB_CODE = "LAB3_UNION_BASED";
 $userId = (int)($_SESSION['user_id'] ?? 0);
+require_prereq_or_block($conn, $userId, 'LAB2_BOOLEAN_BLIND');
 
 $q = '';
 $message = '';
@@ -86,7 +88,7 @@ bs_layout_start('Lab 3 – Practice');
 
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
       <div>
-        <h1 class="h4 fw-bold mb-1">Lab 3: Practice – UNION-based SQLi</h1>
+        <h1 class="h4 fw-bold mb-1">Модул 3: Practice – UNION-based SQLi</h1>
         <p class="text-secondary mb-0">
           Цел: чрез уязвимата търсачка да направиш така, че в резултатите да се появи <strong>admin</strong>.
           При успех се отбелязва автоматично.
@@ -98,9 +100,9 @@ bs_layout_start('Lab 3 – Practice');
     <hr>
 
     <div class="btn-group mb-3" role="group">
-      <a class="btn btn-outline-primary" href="step1.php">Step 1</a>
-      <a class="btn btn-outline-primary" href="step2.php">Step 2</a>
-      <a class="btn btn-success" href="practice.php">Practice</a>
+      <a class="btn btn-outline-primary" href="step1.php">Урок</a>
+      <a class="btn btn-outline-primary" href="step2.php">Примери</a>
+      <a class="btn btn-success" href="practice.php">Упражнение</a>
     </div>
 
     <?php if ($message): ?>
@@ -116,7 +118,6 @@ bs_layout_start('Lab 3 – Practice');
              placeholder="Пример: Phone">
       <div class="d-flex flex-wrap gap-2 mt-3">
         <button type="submit" class="btn btn-brand">Search</button>
-        <a href="/sqli-platform/public/profile.php" class="btn btn-outline-secondary">Виж профил</a>
       </div>
     </form>
 
@@ -204,7 +205,7 @@ bs_layout_start('Lab 3 – Practice');
 
     <?php if ($completedNow): ?>
       <div class="alert alert-success mt-4">
-        ✅ Lab 3 е завършен и прогресът е записан в профила ти.
+        ✅ Модул 3 е завършен и прогресът е записан в профила ти.
       </div>
     <?php endif; ?>
 

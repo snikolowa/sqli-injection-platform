@@ -1,62 +1,47 @@
 <?php
-ini_set('display_errors', 1);        // махни след тестване
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 require_once __DIR__ . '/../../includes/auth.php';
 require_login();
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/lab_gate.php';
+require_once __DIR__ . '/../../includes/layout_bs.php';
 
-$LAB_CODE = "LAB4_ERROR_BASED";
-$userId = (int)($_SESSION['user_id'] ?? 0);
+$LAB_CODE = "LAB4_ERROR_BASED"; // <-- смени ако имаш конкретен код, напр. LAB4_SOMETHING
 
 $message = "";
-$errorBox = "";
 $completedNow = false;
 
-$id = $_GET['id'] ?? '';
-$id = (string)$id;
+$userId = (int)($_SESSION['user_id'] ?? 0);
+require_prereq_or_block($conn, $userId, 'LAB3_UNION_BASED');
 
-// за auto-check: взимаме истинското име на текущата база
-$dbName = "";
-$tmp = mysqli_query($conn, "SELECT DATABASE() AS dbname");
-if ($tmp && mysqli_num_rows($tmp) > 0) {
-    $dbName = mysqli_fetch_assoc($tmp)['dbname'] ?? "";
-}
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $input = $_POST['input'] ?? '';
 
-$rows = [];
+    /**
+     * =========================
+     * TODO: Lab4 уязвима логика
+     * =========================
+     * Замени този SQL с реалния от Lab4.
+     * Идеята е умишлено да е vuln (както при Lab1).
+     */
+    $sql = "SELECT * FROM users WHERE username = '$input'"; // <-- примерна рамка
+    $result = mysqli_query($conn, $sql);
 
-if ($id !== '') {
-    // УЯЗВИМА: директно слагане на параметър в SQL (без валидация)
-    $sql = "SELECT id, name, description FROM products WHERE id = $id";
-    $res = mysqli_query($conn, $sql);
-
-    if ($res) {
-        while ($r = mysqli_fetch_assoc($res)) {
-            $rows[] = $r;
-        }
-        if (count($rows) === 0) {
-            $message = "Няма намерен продукт за това id.";
-        } else {
-            $message = "Намерени резултати: " . count($rows);
-        }
+    /**
+     * =========================
+     * TODO: Критерий за успех
+     * =========================
+     * Определи какво значи “минато” за Lab4.
+     * Пример: ако върне admin ред / ако върне повече от 1 ред / ако върне специфично поле и т.н.
+     */
+    if ($result && mysqli_num_rows($result) > 0) {
+        $message = "✅ Има резултат. Провери дали покри целта на Lab 4.";
+        // $completedNow = true; // <-- активирай когато имаш ясен критерий
     } else {
-        // Умишлено показваме грешката (учебна среда)
-        $err = mysqli_error($conn);
-        $errorBox = $err;
-
-        // Условие за “решено”:
-        // да се появи името на базата между ~...~
-        if ($dbName !== "" && str_contains($err, "~" . $dbName . "~")) {
-            $completedNow = true;
-            $message = "🎉 Успешно! Грешката изведе името на базата данни.";
-        } else {
-            $message = "Има SQL грешка. Опитай да извлечеш името на базата между ~ ~.";
-        }
+        $message = "Няма резултат или неуспешен опит.";
     }
 
-    // Логване (attempts) — записваме само входа (id)
+    // ЛОГВАНЕ (attempts)
     $lab = "lab4_practice";
     $mode = "vuln";
     $successInt = $completedNow ? 1 : 0;
@@ -67,7 +52,8 @@ if ($id !== '') {
          VALUES (?, ?, ?, ?)"
     );
     if ($stmtLog) {
-        mysqli_stmt_bind_param($stmtLog, "sssi", $lab, $mode, $id, $successInt);
+        // използваме username_input като generic поле за входа
+        mysqli_stmt_bind_param($stmtLog, "sssi", $lab, $mode, $input, $successInt);
         mysqli_stmt_execute($stmtLog);
         mysqli_stmt_close($stmtLog);
     }
@@ -86,71 +72,127 @@ if ($id !== '') {
         }
     }
 }
+
+bs_layout_start('Lab 4 – Practice');
 ?>
-<!DOCTYPE html>
-<html lang="bg">
-<head>
-  <meta charset="UTF-8" />
-  <title>Lab 4 - Practice</title>
-</head>
-<body>
-  <nav>
-    <a href="/sqli-platform/public/dashboard.php">Dashboard</a> |
-    <a href="/sqli-platform/labs/lab4/step1.php">Step 1</a> |
-    <a href="/sqli-platform/labs/lab4/step2.php">Step 2</a> |
-    <a href="/sqli-platform/public/profile.php">Профил</a> |
-    <a href="/sqli-platform/public/logout.php">Logout</a>
-  </nav>
 
-  <h1>Lab 4: Practice – Error-based SQL Injection</h1>
+<div class="card shadow-sm">
+  <div class="card-body">
 
-  <p>
-    <strong>Задача:</strong> Предизвикай SQL грешка, която показва името на текущата база данни
-    между символи <strong>~</strong> (пример: <code>~database_name~</code>).
-  </p>
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
+      <div>
+        <h1 class="h4 fw-bold mb-1">Модул 4: Practice</h1>
+        <p class="text-secondary mb-0">
+          Цел: изпълни условието на Модул 4. При успех задачата се отбелязва автоматично като мината.
+        </p>
+      </div>
+      <span class="badge text-bg-primary rounded-pill">Модул 4</span>
+    </div>
 
-  <form method="get" autocomplete="off">
-    <label>Product ID (id):</label><br>
-    <input type="text" name="id" value="<?php echo htmlspecialchars($id); ?>" style="width: 420px;">
-    <button type="submit">Load</button>
-  </form>
-
-  <?php if ($message): ?>
-    <p><strong><?php echo htmlspecialchars($message); ?></strong></p>
-  <?php endif; ?>
-
-  <?php if (count($rows) > 0): ?>
-    <h2>Резултат</h2>
-    <table border="1" cellpadding="8" cellspacing="0">
-      <tr>
-        <th>ID</th>
-        <th>Name</th>
-        <th>Description</th>
-      </tr>
-      <?php foreach ($rows as $r): ?>
-        <tr>
-          <td><?php echo htmlspecialchars((string)$r['id']); ?></td>
-          <td><?php echo htmlspecialchars($r['name']); ?></td>
-          <td><?php echo htmlspecialchars($r['description']); ?></td>
-        </tr>
-      <?php endforeach; ?>
-    </table>
-  <?php endif; ?>
-
-  <?php if ($errorBox): ?>
     <hr>
-    <h2>SQL Error (учебна среда)</h2>
-    <pre><code><?php echo htmlspecialchars($errorBox); ?></code></pre>
-  <?php endif; ?>
 
-  <?php if ($completedNow): ?>
-    <hr>
-    <h2>✅ Lab 4 – Completed</h2>
-    <p>Задачата е отбелязана като мината и се вижда в профила ти.</p>
-  <?php endif; ?>
+    <!-- Navigation -->
+    <div class="btn-group mb-3" role="group">
+      <a class="btn btn-outline-primary" href="step1.php">Урок</a>
+      <a class="btn btn-outline-primary" href="step2.php">Примери</a>
+      <a class="btn btn-success" href="practice.php">Упражнение</a>
+    </div>
 
-  <p style="margin-top:16px;">
-    Забележка: Лабораторията е умишлено уязвима и е предназначена само за учебни цели.
-  </p>
-</body>
-</html>
+    <?php if ($message): ?>
+      <div class="alert <?php echo $completedNow ? 'alert-success' : 'alert-secondary'; ?>">
+        <?php echo htmlspecialchars($message); ?>
+      </div>
+    <?php endif; ?>
+
+    <!-- Practice form -->
+    <form method="post" class="row g-3 mt-2" autocomplete="off">
+      <div class="col-12">
+        <label class="form-label">Input</label>
+        <input type="text" name="input" class="form-control" required>
+        <div class="form-text">
+          Това поле се използва в SQL заявка (умишлено уязвимо, учебна среда).
+        </div>
+      </div>
+
+      <div class="col-12 d-flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-brand">Провери</button>
+      </div>
+    </form>
+
+    <!-- Button to show hints -->
+    <div class="mt-4">
+      <button class="btn btn-outline-info"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#hintsSection"
+              aria-expanded="false"
+              aria-controls="hintsSection">
+        💡 Покажи подсказки
+      </button>
+    </div>
+
+    <!-- Hidden hints -->
+    <div class="collapse mt-3" id="hintsSection">
+      <div class="accordion" id="lab4Hints">
+
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#lab4_hint1">
+              Подсказка 1: Как мислиш за входа?
+            </button>
+          </h2>
+          <div id="lab4_hint1" class="accordion-collapse collapse" data-bs-parent="#lab4Hints">
+            <div class="accordion-body text-secondary">
+              Помисли къде точно се използва въведеното и какъв тип данни очаква (текст/число).
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#lab4_hint2">
+              Подсказка 2: Какво е “успех”?
+            </button>
+          </h2>
+          <div id="lab4_hint2" class="accordion-collapse collapse" data-bs-parent="#lab4Hints">
+            <div class="accordion-body text-secondary">
+              Успехът е конкретен резултат според условието на Lab 4 (например конкретен ред/поле).
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#lab4_hint3">
+              Подсказка 3: Ако не става?
+            </button>
+          </h2>
+          <div id="lab4_hint3" class="accordion-collapse collapse" data-bs-parent="#lab4Hints">
+            <div class="accordion-body text-secondary">
+              Провери как приложението обработва входа: дали има грешки, празни резултати,
+              или различно поведение при различни стойности.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <?php if ($completedNow): ?>
+      <div class="alert alert-success mt-4">
+        ✅ Модул 4 е успешно завършен и е записан в профила ти.
+      </div>
+    <?php endif; ?>
+
+    <div class="small text-secondary mt-4">
+      ⚠️ Тази страница е умишлено уязвима и е предназначена само за обучение.
+    </div>
+
+  </div>
+</div>
+
+<?php bs_layout_end(); ?>

@@ -2,9 +2,17 @@
 require_once __DIR__ . '/../../includes/auth.php';
 require_login();
 
+require_once __DIR__ . '/../../includes/db.php';          // ① добави
+require_once __DIR__ . '/../../includes/lab_gate.php';   // ② добави
 require_once __DIR__ . '/../../includes/layout_bs.php';
+
+$userId = (int)($_SESSION['user_id'] ?? 0);
+
+require_prereq_or_block($conn, $userId, 'LAB0_INTRO');
+
 bs_layout_start('Lab 1 – Authentication Bypass (Step 2)');
 ?>
+
 
 <div class="card shadow-sm">
   <div class="card-body">
@@ -12,21 +20,21 @@ bs_layout_start('Lab 1 – Authentication Bypass (Step 2)');
     <!-- Header -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
       <div>
-        <h1 class="h4 fw-bold mb-1">Lab 1: Authentication Bypass</h1>
+        <h1 class="h4 fw-bold mb-1">Модул 1: Authentication Bypass</h1>
         <p class="text-secondary mb-0">
-          Step 2 — Как входът от формата влияе на SQL заявката (и как възниква уязвимостта)
+          Как входът от формата влияе на SQL заявката (и как възниква уязвимостта)
         </p>
       </div>
-      <span class="badge text-bg-primary rounded-pill">Lab 1</span>
+      <span class="badge text-bg-primary rounded-pill">Модул 1</span>
     </div>
 
     <hr>
 
     <!-- Navigation -->
     <div class="btn-group mb-4" role="group" aria-label="Lab navigation">
-      <a class="btn btn-outline-primary" href="step1.php">Step 1</a>
-      <a class="btn btn-primary" href="step2.php">Step 2</a>
-      <a class="btn btn-outline-success" href="practice.php">Practice</a>
+      <a class="btn btn-outline-primary" href="step1.php">Урок</a>
+      <a class="btn btn-primary" href="step2.php">Примери</a>
+      <a class="btn btn-outline-success" href="practice.php">Упражнение</a>
     </div>
 
     <!-- Content -->
@@ -124,7 +132,7 @@ WHERE username = 'admin' -- ' AND password = '...';</code></pre>
       </div>
 
       <div class="d-flex justify-content-between mt-4">
-        <a class="btn btn-outline-secondary" href="step1.php">← Back</a>
+        <a class="btn btn-outline-secondary" href="step1.php">← Назад</a>
         <a class="btn btn-brand" href="practice.php">Към упражнението →</a>
       </div>
     </div>

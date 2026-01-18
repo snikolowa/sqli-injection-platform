@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_login();
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 
 $LAB_CODE = "LAB1_AUTH_BYPASS";
@@ -11,6 +12,8 @@ $message = "";
 $completedNow = false;
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
+
+require_prereq_or_block($conn, $userId, 'LAB0_INTRO');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = $_POST['username'] ?? '';
@@ -73,21 +76,21 @@ bs_layout_start('Lab 1 – Practice');
     <!-- Header -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
       <div>
-        <h1 class="h4 fw-bold mb-1">Lab 1: Practice – Authentication Bypass</h1>
+        <h1 class="h4 fw-bold mb-1">Модул 1: Practice – Authentication Bypass</h1>
         <p class="text-secondary mb-0">
           Цел: да получиш достъп като <strong>admin</strong>. При успех задачата се отбелязва автоматично като мината.
         </p>
       </div>
-      <span class="badge text-bg-primary rounded-pill">Lab 1</span>
+      <span class="badge text-bg-primary rounded-pill">Модул 1</span>
     </div>
 
     <hr>
 
     <!-- Navigation -->
     <div class="btn-group mb-3" role="group">
-      <a class="btn btn-outline-primary" href="step1.php">Step 1</a>
-      <a class="btn btn-outline-primary" href="step2.php">Step 2</a>
-      <a class="btn btn-success" href="practice.php">Practice</a>
+      <a class="btn btn-outline-primary" href="step1.php">Урок</a>
+      <a class="btn btn-outline-primary" href="step2.php">Примери</a>
+      <a class="btn btn-success" href="practice.php">Упражнение</a>
     </div>
 
     <?php if ($message): ?>
@@ -109,10 +112,7 @@ bs_layout_start('Lab 1 – Practice');
       </div>
 
       <div class="col-12 d-flex flex-wrap gap-2">
-        <button type="submit" class="btn btn-brand">Test</button>
-        <a href="/sqli-platform/public/profile.php" class="btn btn-outline-secondary">
-          Виж профил
-        </a>
+        <button type="submit" class="btn btn-brand">Провери</button>
       </div>
     </form>
 
@@ -201,7 +201,7 @@ bs_layout_start('Lab 1 – Practice');
 
     <?php if ($completedNow): ?>
       <div class="alert alert-success mt-4">
-        ✅ Lab 1 е успешно завършен и е записан в профила ти.
+        ✅ Модул 1 е успешно завършен и е записан в профила ти.
       </div>
     <?php endif; ?>
 

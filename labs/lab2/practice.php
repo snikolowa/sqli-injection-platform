@@ -3,10 +3,12 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_login();
 
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 
 $LAB_CODE = "LAB2_BOOLEAN_BLIND";
 $userId = (int)($_SESSION['user_id'] ?? 0);
+require_prereq_or_block($conn, $userId, 'LAB1_AUTH_BYPASS');
 
 $message = "";
 $resultLabel = "";
@@ -97,21 +99,21 @@ bs_layout_start('Lab 2 – Practice');
 
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
       <div>
-        <h1 class="h4 fw-bold mb-1">Lab 2: Practice – Boolean-based Blind</h1>
+        <h1 class="h4 fw-bold mb-1">Модул 2: Practice – Boolean-based Blind</h1>
         <p class="text-secondary mb-0">
           Цел: потвърди чрез TRUE/FALSE реакция, че <strong>дължината на паролата на admin е 8</strong>.
-          При успех Lab 2 се маркира автоматично като Completed.
+          При успех модул 2 се маркира автоматично като Завършен.
         </p>
       </div>
-      <span class="badge text-bg-primary rounded-pill">Lab 2</span>
+      <span class="badge text-bg-primary rounded-pill">Модул 2</span>
     </div>
 
     <hr>
 
     <div class="btn-group mb-3" role="group">
-      <a class="btn btn-outline-primary" href="step1.php">Step 1</a>
-      <a class="btn btn-outline-primary" href="step2.php">Step 2</a>
-      <a class="btn btn-success" href="practice.php">Practice</a>
+      <a class="btn btn-outline-primary" href="step1.php">Урок</a>
+      <a class="btn btn-outline-primary" href="step2.php">Примери</a>
+      <a class="btn btn-success" href="practice.php">Упражнение</a>
     </div>
 
     <?php if ($message): ?>
@@ -126,8 +128,7 @@ bs_layout_start('Lab 2 – Practice');
              value="<?php echo htmlspecialchars($condition); ?>"
              placeholder="(пример: условие, което връща TRUE или FALSE)">
       <div class="d-flex flex-wrap gap-2 mt-3">
-        <button type="submit" class="btn btn-brand">Test</button>
-        <a href="/sqli-platform/public/profile.php" class="btn btn-outline-secondary">Виж профил</a>
+        <button type="submit" class="btn btn-brand">Провери</button>
       </div>
     </form>
 
@@ -197,7 +198,7 @@ bs_layout_start('Lab 2 – Practice');
 
     <?php if ($completedNow): ?>
       <div class="alert alert-success mt-4">
-        ✅ Lab 2 е завършен и прогресът е записан в профила ти.
+        ✅ Модул 2 е завършен и прогресът е записан в профила ти.
       </div>
     <?php endif; ?>
 

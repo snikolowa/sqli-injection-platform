@@ -1,37 +1,46 @@
 <?php
-session_start();
-require_once '../includes/db.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-$username = isset($_POST['username']) ? trim($_POST['username']) : '';
-$password = isset($_POST['password']) ? $_POST['password'] : '';
+require_once __DIR__ . '/../includes/db.php';
+
+$username = trim($_POST['username'] ?? '');
+$password = $_POST['password'] ?? '';
+
+/**
+ * Същата нормализация като при регистрацията
+ */
+$username = preg_replace('/\s+/', ' ', $username);
+$username = mb_strtolower($username, 'UTF-8');
 
 if ($username === '' || $password === '') {
     header("Location: login.php?error=1");
     exit;
 }
 
-$stmt = mysqli_prepare($conn, "SELECT id, username, password_hash FROM platform_users WHERE username = ?");
+$stmt = mysqli_prepare($conn, "SELECT id, password FROM users WHERE username = ?");
 if (!$stmt) {
-    // Не показваме детайли
     header("Location: login.php?error=1");
     exit;
 }
 
 mysqli_stmt_bind_param($stmt, "s", $username);
 mysqli_stmt_execute($stmt);
-$result = mysqli_stmt_get_result($stmt);
+$res = mysqli_stmt_get_result($stmt);
 
-$user = $result ? mysqli_fetch_assoc($result) : null;
-mysqli_stmt_close($stmt);
+if ($row = mysqli_fetch_assoc($res)) {
+    $hash = $row['password'] ?? '';
 
-if ($user && password_verify($password, $user['password_hash'])) {
-    // session
-    $_SESSION['user_id'] = (int)$user['id'];
-    $_SESSION['username'] = $user['username'];
+    if ($hash !== '' && password_verify($password, $hash)) {
+        $_SESSION['user_id'] = (int)$row['id'];
+        mysqli_stmt_close($stmt);
 
-    header("Location: dashboard.php");
-    exit;
+        header("Location: dashboard.php");
+        exit;
+    }
 }
 
+mysqli_stmt_close($stmt);
 header("Location: login.php?error=1");
 exit;

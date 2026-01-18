@@ -1,18 +1,25 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_login();
-
+      
+require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/lab_gate.php';  
 require_once __DIR__ . '/../../includes/layout_bs.php';
+
+$userId = (int)($_SESSION['user_id'] ?? 0);
+
+require_prereq_or_block($conn, $userId, 'LAB0_INTRO');
+
 bs_layout_start('Lab 1 – Authentication Bypass (Step 1)');
 ?>
+
 
 <div class="card shadow-sm">
   <div class="card-body">
 
-    <!-- Header -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
       <div>
-        <h1 class="h4 fw-bold mb-1">Lab 1: Authentication Bypass</h1>
+        <h1 class="h4 fw-bold mb-1">Модул 1: Authentication Bypass</h1>
         <p class="text-secondary mb-0">
           Въведение в заобикалянето на логин механизми чрез SQL Injection.
         </p>
@@ -22,14 +29,12 @@ bs_layout_start('Lab 1 – Authentication Bypass (Step 1)');
 
     <hr>
 
-    <!-- Navigation -->
     <div class="btn-group mb-4" role="group" aria-label="Lab navigation">
-      <a class="btn btn-primary" href="step1.php">Step 1</a>
-      <a class="btn btn-outline-primary" href="step2.php">Step 2</a>
-      <a class="btn btn-outline-success" href="practice.php">Practice</a>
+      <a class="btn btn-primary" href="step1.php">Урок</a>
+      <a class="btn btn-outline-primary" href="step2.php">Примери</a>
+      <a class="btn btn-outline-success" href="practice.php">Упражнение</a>
     </div>
 
-    <!-- Content -->
     <div>
 
       <h2 class="h5 fw-bold">1. Какво представлява Authentication Bypass?</h2>
@@ -104,7 +109,7 @@ bs_layout_start('Lab 1 – Authentication Bypass (Step 1)');
       </div>
 
       <div class="d-flex justify-content-end mt-4">
-        <a class="btn btn-brand" href="step2.php">Продължи към Step 2 →</a>
+        <a class="btn btn-brand" href="step2.php">Продължи към примерите →</a>
       </div>
 
     </div>
