@@ -15,6 +15,12 @@ function bs_layout_start(string $title): void {
 
     $base = base_url();
     $loggedIn = !empty($_SESSION['user_id']);
+    $current = $_SERVER['SCRIPT_NAME'] ?? '';
+    $username = (string)($_SESSION['username'] ?? '');
+
+    $isActive = function(string $path) use ($current): bool {
+        return $current === $path;
+    };
     ?>
     <!doctype html>
     <html lang="bg">
@@ -43,35 +49,84 @@ function bs_layout_start(string $title): void {
                     <?php if ($loggedIn): ?>
                       <?php if (function_exists('is_admin') && is_admin()): ?>
                         <li class="nav-item">
-                          <a class="nav-link" href="<?php echo $base; ?>/public/admin/index.php">Админ</a>
-                        </li>
-                      <?php else: ?>
-                        <li class="nav-item">
-                          <a class="nav-link" href="<?php echo $base; ?>/public/ctf.php">CTF</a>
+                          <?php
+                            $adminPath = $base . '/public/admin/index.php';
+                            $adminActive = $isActive($adminPath);
+                          ?>
+                          <a class="nav-link <?php echo $adminActive ? 'nav-active' : ''; ?>"
+                             <?php echo $adminActive ? 'aria-current="page"' : ''; ?>
+                             href="<?php echo $adminPath; ?>">Админ</a>
                         </li>
                       <?php endif; ?>
 
                         <li class="nav-item">
-                            <a class="nav-link" href="<?php echo $base; ?>/public/dashboard.php">Табло</a>
+                            <?php
+                              $dashPath = $base . '/public/dashboard.php';
+                              $dashActive = $isActive($dashPath);
+                            ?>
+                            <a class="nav-link <?php echo $dashActive ? 'nav-active' : ''; ?>"
+                               <?php echo $dashActive ? 'aria-current="page"' : ''; ?>
+                               href="<?php echo $dashPath; ?>">Табло</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="<?php echo $base; ?>/public/profile.php">Профил</a>
+                            <?php
+                              $profilePath = $base . '/public/profile.php';
+                              $profileActive = $isActive($profilePath);
+                            ?>
+                            <a class="nav-link d-flex align-items-center gap-2 <?php echo $profileActive ? 'nav-active' : ''; ?>"
+                               <?php echo $profileActive ? 'aria-current="page"' : ''; ?>
+                               href="<?php echo $profilePath; ?>">
+                                <span class="nav-avatar rounded-circle bg-secondary text-white d-inline-flex align-items-center justify-content-center">
+                                  <?php echo htmlspecialchars(mb_strtoupper(mb_substr($username, 0, 1, 'UTF-8'), 'UTF-8')); ?>
+                                </span>
+                                <span><?php echo htmlspecialchars($username ?: 'Профил'); ?></span>
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="<?php echo $base; ?>/public/logout.php">Изход</a>
+                            <?php
+                              $logoutPath = $base . '/public/logout.php';
+                              $logoutActive = $isActive($logoutPath);
+                            ?>
+                            <a class="nav-link <?php echo $logoutActive ? 'nav-active' : ''; ?>"
+                               <?php echo $logoutActive ? 'aria-current="page"' : ''; ?>
+                               href="<?php echo $logoutPath; ?>">Изход 🚪</a>
                         </li>
                     <?php else: ?>
                         <li class="nav-item">
-                            <a class="nav-link" href="<?php echo $base; ?>/public/index.php">Начало</a>
+                            <?php
+                              $homePath = $base . '/public/index.php';
+                              $homeActive = $isActive($homePath);
+                            ?>
+                            <a class="nav-link <?php echo $homeActive ? 'nav-active' : ''; ?>"
+                               <?php echo $homeActive ? 'aria-current="page"' : ''; ?>
+                               href="<?php echo $homePath; ?>">Начало</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="<?php echo $base; ?>/public/labs.php">Модули</a>
+                            <?php
+                              $labsPath = $base . '/public/labs.php';
+                              $labsActive = $isActive($labsPath);
+                            ?>
+                            <a class="nav-link <?php echo $labsActive ? 'nav-active' : ''; ?>"
+                               <?php echo $labsActive ? 'aria-current="page"' : ''; ?>
+                               href="<?php echo $labsPath; ?>">Модули</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="<?php echo $base; ?>/public/register.php">Регистрация</a>
+                            <?php
+                              $registerPath = $base . '/public/register.php';
+                              $registerActive = $isActive($registerPath);
+                            ?>
+                            <a class="nav-link <?php echo $registerActive ? 'nav-active' : ''; ?>"
+                               <?php echo $registerActive ? 'aria-current="page"' : ''; ?>
+                               href="<?php echo $registerPath; ?>">Регистрация</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="<?php echo $base; ?>/public/login.php">Вход</a>
+                            <?php
+                              $loginPath = $base . '/public/login.php';
+                              $loginActive = $isActive($loginPath);
+                            ?>
+                            <a class="nav-link <?php echo $loginActive ? 'nav-active' : ''; ?>"
+                               <?php echo $loginActive ? 'aria-current="page"' : ''; ?>
+                               href="<?php echo $loginPath; ?>">Вход</a>
                         </li>
                     <?php endif; ?>
                 </ul>

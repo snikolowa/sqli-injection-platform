@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 require_once __DIR__ . '/../../includes/modules.php';
 require_once __DIR__ . '/../../includes/attempt_logger.php';
+require_once __DIR__ . '/../../includes/points.php';
 
 $LAB_CODE = "LAB5_TIME_BASED";
 $userId = (int)($_SESSION['user_id'] ?? 0);
@@ -69,6 +70,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_stmt_bind_param($stmt, "is", $userId, $LAB_CODE);
             mysqli_stmt_execute($stmt);
             mysqli_stmt_close($stmt);
+        }
+
+        $awarded = points_award_for_lab_completion($conn, $userId, $LAB_CODE);
+        if ($awarded > 0) {
+            $message .= " (+{$awarded} точки)";
         }
     }
 }

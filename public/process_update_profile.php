@@ -12,7 +12,7 @@ $lastName  = preg_replace('/\s+/', ' ', $lastName);
 
 $stmt = mysqli_prepare($conn, "UPDATE users SET first_name = ?, last_name = ? WHERE id = ?");
 if (!$stmt) {
-  header("Location: edit_profile.php?error=DB грешка");
+  header("Location: profile.php?error=DB грешка");
   exit;
 }
 
@@ -20,5 +20,5 @@ mysqli_stmt_bind_param($stmt, "ssi", $firstName, $lastName, $userId);
 mysqli_stmt_execute($stmt);
 mysqli_stmt_close($stmt);
 
-header("Location: edit_profile.php?ok=Промените са запазени");
+header("Location: profile.php?ok=Промените са запазени");
 exit;

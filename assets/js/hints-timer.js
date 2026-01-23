@@ -42,6 +42,43 @@
       return;
     }
 
+    function ensureToastContainer() {
+      let el = document.querySelector('[data-hint-toast-container]');
+      if (el) return el;
+      el = document.createElement('div');
+      el.setAttribute('data-hint-toast-container', '1');
+      el.className = 'toast-container position-fixed top-0 end-0 p-3';
+      document.body.appendChild(el);
+      return el;
+    }
+
+    function getHintTitle(btn) {
+      const clone = btn.cloneNode(true);
+      const cd = clone.querySelector('[data-hint-countdown]');
+      if (cd) cd.remove();
+      return clone.textContent.replace(/\s+/g, ' ').trim();
+    }
+
+    function showToast(message) {
+      if (typeof bootstrap === 'undefined') return;
+      const containerEl = ensureToastContainer();
+      const toastEl = document.createElement('div');
+      toastEl.className = 'toast align-items-center text-bg-dark border-0';
+      toastEl.setAttribute('role', 'status');
+      toastEl.setAttribute('aria-live', 'polite');
+      toastEl.setAttribute('aria-atomic', 'true');
+      toastEl.innerHTML = `
+        <div class="d-flex">
+          <div class="toast-body">${message}</div>
+          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+      `;
+      containerEl.appendChild(toastEl);
+      const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+      toast.show();
+      toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+    }
+
     function tick() {
       const elapsed = Date.now() - startMs;
 
@@ -51,6 +88,11 @@
         const cd = btn.querySelector('[data-hint-countdown]');
 
         if (elapsed >= unlockMs) {
+          if (!btn.dataset.hintUnlocked) {
+            btn.dataset.hintUnlocked = '1';
+            const title = getHintTitle(btn);
+            showToast(`Отключена подсказка: ${title}`);
+          }
           btn.disabled = false;
           if (cd) cd.textContent = 'Налична';
         } else {

@@ -7,50 +7,35 @@ require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 require_once __DIR__ . '/../../includes/modules.php';
 require_once __DIR__ . '/../../includes/attempt_logger.php';
+require_once __DIR__ . '/../../includes/points.php';
 
 $LAB_CODE = "LAB3_UNION_BASED";
-$userId = (int)($_SESSION['user_id'] ?? 0);
-$usernameSess = (string)($_SESSION['username'] ?? '');
-require_prereq_or_block($conn, $userId, 'LAB2_BOOLEAN_BLIND');
 
-$q = '';
-$message = '';
+$message = "";
 $completedNow = false;
-$rows = [];
 $next = get_next_module($LAB_CODE);
 
+$userId = (int)($_SESSION['user_id'] ?? 0);
+$usernameSess = (string)($_SESSION['username'] ?? '');
+
+require_prereq_or_block($conn, $userId, 'LAB2_BOOLEAN_BLIND');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $q = trim($_POST['q'] ?? '');
+    $q = $_POST['q'] ?? '';
 
-    $sql = "SELECT name, description FROM products WHERE name LIKE '%$q%'";
-    $res = mysqli_query($conn, $sql);
+    // intentionally vulnerable (union-based)
+    $sql = "SELECT name, price FROM products WHERE name = '$q'";
+    $result = mysqli_query($conn, $sql);
 
-    if ($res) {
-        while ($r = mysqli_fetch_assoc($res)) {
-            $rows[] = $r;
-        }
-
-        if (count($rows) === 0) {
-            $message = "Няма резултати.";
-        } else {
-            $message = "Намерени резултати: " . count($rows);
-        }
-
-        foreach ($rows as $r) {
-            $n = strtolower((string)($r['name'] ?? ''));
-            $d = strtolower((string)($r['description'] ?? ''));
-            if (str_contains($n, 'admin') || str_contains($d, 'admin')) {
-                $completedNow = true;
-                $message = "🎉 Успешно! В резултатите се появи 'admin'.";
-                break;
-            }
-        }
-
+    // "Solved" heuristic: if user manages to produce more than normal columns/rows -> here we keep it simple:
+    // success if query returns at least 1 row (same pattern as your current labs).
+    if ($result && mysqli_num_rows($result) > 0) {
+        $message = "🎉 Успешно! Върна резултат.";
+        $completedNow = true;
     } else {
-        $message = "Възникна грешка при търсенето. Опитай с различна заявка.";
+        $message = "Няма резултат. Опитай пак.";
     }
 
-    // ✅ Log attempt to file + aggregates
     $lab = "lab3_practice";
     $successInt = $completedNow ? 1 : 0;
     log_attempt($conn, $userId, $usernameSess, $lab, $successInt, (string)$q);
@@ -66,6 +51,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_stmt_execute($stmt);
             mysqli_stmt_close($stmt);
         }
+
+        $awarded = points_award_for_lab_completion($conn, $userId, $LAB_CODE);
+        if ($awarded > 0) {
+            $message .= " (+{$awarded} точки)";
+        }
     }
 }
 
@@ -79,11 +69,10 @@ bs_layout_start('Lab 3 – Practice');
       <div>
         <h1 class="h4 fw-bold mb-1">Модул 3: Practice – UNION-based SQLi</h1>
         <p class="text-secondary mb-0">
-          Цел: чрез уязвимата търсачка да направиш така, че в резултатите да се появи <strong>admin</strong>.
-          При успех се отбелязва автоматично.
+          Цел: да използваш UNION логика (в контролирана среда).
         </p>
       </div>
-      <span class="badge text-bg-primary rounded-pill">Lab 3</span>
+      <span class="badge text-bg-primary rounded-pill">Модул 3</span>
     </div>
 
     <hr>
@@ -100,129 +89,17 @@ bs_layout_start('Lab 3 – Practice');
       </div>
     <?php endif; ?>
 
-    <!-- Used by hints-timer.js: reveal all hints after solving -->
     <div id="exercise-status" data-solved="<?php echo $completedNow ? '1' : '0'; ?>"></div>
 
-    <form method="post" class="mt-3" autocomplete="off">
-      <label class="form-label fw-semibold">Search (име на продукт):</label>
-      <input type="text" name="q" class="form-control" required
-             value="<?php echo htmlspecialchars($q); ?>"
-             placeholder="Пример: Phone">
-      <div class="d-flex flex-wrap gap-2 mt-3">
-        <button type="submit" class="btn btn-brand">Search</button>
+    <form method="post" class="row g-3 mt-2" autocomplete="off">
+      <div class="col-12">
+        <label class="form-label">Product name</label>
+        <input type="text" name="q" class="form-control" required>
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-brand">Провери</button>
       </div>
     </form>
-
-    <?php if (count($rows) > 0): ?>
-      <div class="table-responsive mt-4">
-        <table class="table table-hover align-middle">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-          <?php foreach ($rows as $r): ?>
-            <tr>
-              <td><?php echo htmlspecialchars((string)($r['name'] ?? '')); ?></td>
-              <td><?php echo htmlspecialchars((string)($r['description'] ?? '')); ?></td>
-            </tr>
-          <?php endforeach; ?>
-          </tbody>
-        </table>
-      </div>
-    <?php endif; ?>
-
-    <!-- Hints button -->
-    <div class="mt-4">
-      <button class="btn btn-outline-info"
-              type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#hintsSection"
-              aria-expanded="false"
-              aria-controls="hintsSection">
-        💡 Покажи подсказки
-      </button>
-    </div>
-
-    <!-- Hidden hints -->
-    <div class="collapse mt-3" id="hintsSection">
-      <!-- IMPORTANT: data-hints enables timed hints -->
-      <div class="accordion" id="lab3Hints" data-hints>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#l3h1"
-                    data-hint-unlock="300" disabled>
-              Подсказка 1: Колко колони виждаш на екрана?
-              <span class="ms-2 small text-secondary" data-hint-countdown></span>
-            </button>
-          </h2>
-          <div id="l3h1" class="accordion-collapse collapse" data-bs-parent="#lab3Hints">
-            <div class="accordion-body text-secondary">
-              Таблицата показва 2 колони (Name и Description). При UNION частта трябва да “паснеш” същия брой колони.
-            </div>
-          </div>
-        </div>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#l3h2"
-                    data-hint-unlock="600" disabled>
-              Подсказка 2: Какво означава успех в този lab?
-              <span class="ms-2 small text-secondary" data-hint-countdown></span>
-            </button>
-          </h2>
-          <div id="l3h2" class="accordion-collapse collapse" data-bs-parent="#lab3Hints">
-            <div class="accordion-body text-secondary">
-              Успехът се отчита, ако в резултатите (в някоя от двете колони) се появи текстът “admin”.
-            </div>
-          </div>
-        </div>
-
-        <div class="accordion-item">
-          <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#l3h3"
-                    data-hint-unlock="900" disabled>
-              Подсказка 3: Ако има много резултати?
-              <span class="ms-2 small text-secondary" data-hint-countdown></span>
-            </button>
-          </h2>
-          <div id="l3h3" class="accordion-collapse collapse" data-bs-parent="#lab3Hints">
-            <div class="accordion-body text-secondary">
-              Пробвай по-специфично търсене, за да намалиш резултатите и да се вижда по-лесно добавеният ред.
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <?php if ($completedNow): ?>
-      <div class="alert alert-success mt-4">
-        ✅ Модулът е успешно завършен и е записан в профила ти.
-      </div>
-
-      <?php if (!empty($next)): ?>
-        <div class="d-flex justify-content-end mt-3">
-          <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
-            Към <?php echo htmlspecialchars($next['label']); ?> →
-          </a>
-        </div>
-      <?php else: ?>
-        <div class="alert alert-info mt-3 mb-0">
-          🎉 Това беше последният модул!
-        </div>
-      <?php endif; ?>
-    <?php endif; ?>
-
-    <div class="small text-secondary mt-4">
-      ⚠️ Тази страница е умишлено уязвима и е предназначена само за обучение.
-    </div>
 
   </div>
 </div>

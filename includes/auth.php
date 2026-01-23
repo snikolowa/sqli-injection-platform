@@ -22,3 +22,10 @@ function require_admin(): void {
     }
 }
 
+function require_not_admin(string $redirectTo = "/sqli-platform/public/dashboard.php"): void {
+    if (is_admin()) {
+        $_SESSION['flash_error'] = "Админите нямат достъп до упражненията.";
+        header("Location: " . $redirectTo);
+        exit;
+    }
+}

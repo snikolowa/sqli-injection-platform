@@ -30,6 +30,12 @@ function require_prereq_or_block(
     string $prereqLabCode,
     string $redirectTo = "/sqli-platform/public/dashboard.php"
 ): void {
+    if (function_exists('is_admin') && is_admin()) {
+        $_SESSION['flash_error'] = "Админите нямат достъп до упражненията.";
+        header("Location: " . $redirectTo);
+        exit;
+    }
+
     if ($prereqLabCode === '') return;
 
     if (!is_lab_completed($conn, $userId, $prereqLabCode)) {

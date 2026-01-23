@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 require_once __DIR__ . '/../../includes/modules.php';
 require_once __DIR__ . '/../../includes/attempt_logger.php';
+require_once __DIR__ . '/../../includes/points.php';
 
 $LAB_CODE = "LAB1_AUTH_BYPASS";
 
@@ -39,11 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "Невалидни данни или неуспешен опит.";
     }
 
-    // ✅ Log attempt to file + aggregates (replaces DB attempts table)
+    // ✅ Log attempt (username only)
     $lab = "lab1_practice";
     $successInt = $completedNow ? 1 : 0;
-
-    // ⚠️ Не логваме паролата. Само username input.
     log_attempt($conn, $userId, $usernameSess, $lab, $successInt, (string)$username);
 
     if ($completedNow && $userId > 0) {
@@ -57,6 +56,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_stmt_execute($stmt);
             mysqli_stmt_close($stmt);
         }
+
+        // ✅ AUTO POINTS on completion (only once)
+        $awarded = points_award_for_lab_completion($conn, $userId, $LAB_CODE);
+        if ($awarded > 0) {
+            $message .= " (+{$awarded} точки)";
+        }
     }
 }
 
@@ -66,7 +71,6 @@ bs_layout_start('Lab 1 – Practice');
 <div class="card shadow-sm">
   <div class="card-body">
 
-    <!-- Header -->
     <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-2">
       <div>
         <h1 class="h4 fw-bold mb-1">Модул 1: Practice – Authentication Bypass</h1>
@@ -79,7 +83,6 @@ bs_layout_start('Lab 1 – Practice');
 
     <hr>
 
-    <!-- Navigation -->
     <div class="btn-group mb-3" role="group">
       <a class="btn btn-outline-primary" href="step1.php">Урок</a>
       <a class="btn btn-outline-primary" href="step2.php">Примери</a>
@@ -92,10 +95,8 @@ bs_layout_start('Lab 1 – Practice');
       </div>
     <?php endif; ?>
 
-    <!-- Used by hints-timer.js: reveal all hints after solving -->
     <div id="exercise-status" data-solved="<?php echo $completedNow ? '1' : '0'; ?>"></div>
 
-    <!-- Login form -->
     <form method="post" class="row g-3 mt-2" autocomplete="off">
       <div class="col-12 col-md-6">
         <label class="form-label">Username</label>
@@ -112,7 +113,6 @@ bs_layout_start('Lab 1 – Practice');
       </div>
     </form>
 
-    <!-- Button to show hints -->
     <div class="mt-4">
       <button class="btn btn-outline-info"
               type="button"
@@ -124,9 +124,7 @@ bs_layout_start('Lab 1 – Practice');
       </button>
     </div>
 
-    <!-- Hidden hints -->
     <div class="collapse mt-3" id="hintsSection">
-      <!-- IMPORTANT: data-hints enables timed hints -->
       <div class="accordion" id="lab1Hints" data-hints>
 
         <div class="accordion-item">
@@ -202,28 +200,6 @@ bs_layout_start('Lab 1 – Practice');
         </div>
 
       </div>
-    </div>
-
-    <?php if ($completedNow): ?>
-      <div class="alert alert-success mt-4">
-        ✅ Модулът е успешно завършен и е записан в профила ти.
-      </div>
-
-      <?php if (!empty($next)): ?>
-        <div class="d-flex justify-content-end mt-3">
-          <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
-            Към <?php echo htmlspecialchars($next['label']); ?> →
-          </a>
-        </div>
-      <?php else: ?>
-        <div class="alert alert-info mt-3 mb-0">
-          🎉 Това беше последният модул!
-        </div>
-      <?php endif; ?>
-    <?php endif; ?>
-
-    <div class="small text-secondary mt-4">
-      ⚠️ Тази страница е умишлено уязвима и е предназначена само за обучение.
     </div>
 
   </div>

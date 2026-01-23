@@ -8,6 +8,7 @@ require_once __DIR__ . '/../includes/layout_bs.php';
 
 $base = base_url();
 $loggedIn = !empty($_SESSION['user_id']);
+$isAdmin = function_exists('is_admin') ? is_admin() : false;
 
 // ---------- Public counters (visible for guests too) ----------
 $registeredUsers = 0;
@@ -26,6 +27,42 @@ $mainLabCodes = [
   'LAB3_UNION_BASED',
   'LAB4_ERROR_BASED',
   'LAB5_TIME_BASED',
+];
+
+$labTitles = [
+  'LAB0_INTRO' => 'SQL Injection Basics',
+  'LAB1_AUTH_BYPASS' => 'Authentication Bypass',
+  'LAB2_BOOLEAN_BLIND' => 'Boolean-based Blind SQLi',
+  'LAB3_UNION_BASED' => 'UNION-based SQLi',
+  'LAB4_ERROR_BASED' => 'Error-based SQLi',
+  'LAB5_TIME_BASED' => 'Time-based Blind SQLi',
+];
+
+$labShort = [
+  'LAB0_INTRO' => 'Въведение',
+  'LAB1_AUTH_BYPASS' => 'Module 1',
+  'LAB2_BOOLEAN_BLIND' => 'Module 2',
+  'LAB3_UNION_BASED' => 'Module 3',
+  'LAB4_ERROR_BASED' => 'Module 4',
+  'LAB5_TIME_BASED' => 'Module 5',
+];
+
+$labGoals = [
+  'LAB0_INTRO' => 'Започни с основите и отключи модулите.',
+  'LAB1_AUTH_BYPASS' => 'Получаване на достъп чрез логически bypass.',
+  'LAB2_BOOLEAN_BLIND' => 'Потвърди факт чрез true/false отговори.',
+  'LAB3_UNION_BASED' => 'Извлечи данни чрез UNION заявки.',
+  'LAB4_ERROR_BASED' => 'Използвай грешки за извличане на информация.',
+  'LAB5_TIME_BASED' => 'Потвърди условие чрез време за отговор.',
+];
+
+$labDifficulty = [
+  'LAB0_INTRO' => 'Въведение',
+  'LAB1_AUTH_BYPASS' => 'Лесно',
+  'LAB2_BOOLEAN_BLIND' => 'Средно',
+  'LAB3_UNION_BASED' => 'Средно',
+  'LAB4_ERROR_BASED' => 'Трудно',
+  'LAB5_TIME_BASED' => 'Трудно',
 ];
 
 // Prepared statement with IN (...)
@@ -74,8 +111,14 @@ $nextModule = null;
 $attemptsTotal = 0;
 $successTotal = 0;
 $lastAttemptAt = null;
+$userPoints = 0;
+$leaderboard = [];
+$userRank = null;
+$userRankTotal = 0;
+$treeLabs = [];
+$introDone = false;
 
-if ($loggedIn && $userId > 0) {
+if ($loggedIn && $userId > 0 && !$isAdmin) {
   $stmtP = mysqli_prepare($conn, "SELECT lab_code FROM user_progress WHERE user_id = ? AND completed = 1");
   if ($stmtP) {
     mysqli_stmt_bind_param($stmtP, 'i', $userId);
@@ -94,14 +137,36 @@ if ($loggedIn && $userId > 0) {
 
   $progressPct = (int)round(($userCompletedMain / max(1, count($mainLabCodes))) * 100);
 
-  // next module = first not completed from ordered modules (skip intro)
+  // next module = first not completed from ordered modules
   foreach (get_modules_ordered() as $m) {
-    if (($m['code'] ?? '') === 'LAB0_INTRO') continue;
     $code = (string)($m['code'] ?? '');
     if ($code !== '' && empty($userCompletedSet[$code])) {
       $nextModule = $m;
       break;
     }
+  }
+
+  $introDone = !empty($userCompletedSet['LAB0_INTRO']);
+
+  // build skill tree (status: completed / current / locked)
+  $foundCurrent = false;
+  foreach (get_modules_ordered() as $m) {
+    $code = (string)($m['code'] ?? '');
+    $done = $code !== '' && !empty($userCompletedSet[$code]);
+    $status = 'locked';
+    if ($done) {
+      $status = 'completed';
+    } elseif (!$foundCurrent) {
+      $status = 'current';
+      $foundCurrent = true;
+    }
+
+    $treeLabs[] = [
+      'code' => $code,
+      'label' => (string)($m['label'] ?? $code),
+      'path' => (string)($m['path'] ?? ''),
+      'status' => $status,
+    ];
   }
 
   // attempts aggregates
@@ -116,6 +181,56 @@ if ($loggedIn && $userId > 0) {
       $lastAttemptAt = $row['last_attempt_at'] ?? null;
     }
     mysqli_stmt_close($stmtA);
+  }
+
+  // points total
+  $stmtPts = mysqli_prepare($conn, "SELECT COALESCE(SUM(delta),0) AS pts FROM user_points_ledger WHERE user_id = ?");
+  if ($stmtPts) {
+    mysqli_stmt_bind_param($stmtPts, 'i', $userId);
+    mysqli_stmt_execute($stmtPts);
+    $rp = mysqli_stmt_get_result($stmtPts);
+    if ($rp && ($row = mysqli_fetch_assoc($rp))) {
+      $userPoints = (int)($row['pts'] ?? 0);
+    }
+    mysqli_stmt_close($stmtPts);
+  }
+
+  // leaderboard top 10 (exclude admins)
+  $resLb = mysqli_query($conn, "
+    SELECT u.id, u.username, COALESCE(SUM(l.delta),0) AS points
+    FROM users u
+    LEFT JOIN user_points_ledger l ON l.user_id = u.id
+    WHERE COALESCE(u.role,'user') <> 'admin'
+    GROUP BY u.id
+    ORDER BY points DESC, u.username ASC
+    LIMIT 10
+  ");
+  if ($resLb) {
+    while ($row = mysqli_fetch_assoc($resLb)) {
+      $leaderboard[] = $row;
+    }
+  }
+
+  // user rank (global)
+  $stmtRank = mysqli_prepare($conn, "
+    SELECT COUNT(*) AS r
+    FROM (
+      SELECT u.id, COALESCE(SUM(l.delta),0) AS points
+      FROM users u
+      LEFT JOIN user_points_ledger l ON l.user_id = u.id
+      WHERE COALESCE(u.role,'user') <> 'admin'
+      GROUP BY u.id
+    ) t
+    WHERE t.points > ?
+  ");
+  if ($stmtRank) {
+    mysqli_stmt_bind_param($stmtRank, 'i', $userPoints);
+    mysqli_stmt_execute($stmtRank);
+    $rr = mysqli_stmt_get_result($stmtRank);
+    if ($rr && ($row = mysqli_fetch_assoc($rr))) {
+      $userRank = (int)($row['r'] ?? 0) + 1;
+    }
+    mysqli_stmt_close($stmtRank);
   }
 }
 
@@ -230,66 +345,163 @@ bs_layout_start('SQLi Training Platform');
 
 <?php else: ?>
   <!-- Logged-in home -->
+  <?php if ($isAdmin): ?>
+    <section class="p-4 p-md-5 bg-white rounded-4 shadow-sm border">
+      <h1 class="h3 fw-bold mb-2">Начало</h1>
+      <p class="text-secondary mb-3">
+        Влязъл си като <strong>админ</strong>. Нямаш достъп до упражненията.
+      </p>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-brand" href="<?php echo $base; ?>/public/admin/index.php">Към админ панела</a>
+        <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/dashboard.php">Табло</a>
+        <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/profile.php">Профил</a>
+      </div>
+    </section>
+  <?php else: ?>
   <section class="p-4 p-md-5 bg-white rounded-4 shadow-sm border">
-    <div class="row g-4 align-items-center">
-      <div class="col-12 col-lg-8">
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <span class="badge text-bg-dark rounded-pill">Welcome back</span>
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="badge text-bg-dark rounded-pill">Добре дошъл</span>
           <span class="text-secondary">@<?php echo htmlspecialchars($username); ?></span>
         </div>
-
-        <h1 class="h3 fw-bold mb-2">Твоят прогрес</h1>
-        <p class="text-secondary mb-4">
-          Завършени упражнения: <strong><?php echo (int)$userCompletedMain; ?></strong> / <?php echo (int)count($mainLabCodes); ?>
-        </p>
-
-        <div class="progress rounded-pill" style="height: 12px;">
-          <div class="progress-bar" role="progressbar" style="width: <?php echo (int)$progressPct; ?>%" aria-valuenow="<?php echo (int)$progressPct; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+        <h1 class="h3 fw-bold mb-1">Начало</h1>
+        <p class="text-secondary mb-0">Изгради уменията си стъпка по стъпка по SQLi маршрута.</p>
+      </div>
+      <div class="text-end">
+        <div class="badge text-bg-primary rounded-pill px-3 py-2">
+          <?php echo (int)$userCompletedMain; ?> / <?php echo (int)count($mainLabCodes); ?>
         </div>
-        <div class="d-flex justify-content-between text-secondary small mt-2">
-          <span><?php echo (int)$progressPct; ?>%</span>
-          <span>Автоматично отключване на модули</span>
-        </div>
+        <div class="small text-secondary mt-1"><?php echo (int)$progressPct; ?>% завършено</div>
+      </div>
+    </div>
 
-        <div class="d-flex flex-wrap gap-2 mt-4">
-          <?php if (!empty($nextModule['path'])): ?>
-            <a class="btn btn-brand" href="<?php echo htmlspecialchars($nextModule['path']); ?>">Продължи: <?php echo htmlspecialchars($nextModule['label'] ?? 'Следващ модул'); ?></a>
-          <?php else: ?>
-            <a class="btn btn-brand" href="<?php echo $base; ?>/public/dashboard.php">Виж таблото</a>
-          <?php endif; ?>
-          <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/dashboard.php">Табло</a>
-          <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/profile.php">Профил</a>
-          <?php if (is_admin()): ?>
-            <a class="btn btn-outline-danger" href="<?php echo $base; ?>/public/admin/index.php">Админ панел</a>
-          <?php endif; ?>
+    <?php if (!$introDone): ?>
+      <div class="alert alert-warning mt-3 mb-0 rounded-4">
+        👋 Започни с <strong>Intro</strong>, за да отключиш платформата.
+      </div>
+    <?php endif; ?>
+
+    <div class="row g-4 mt-2">
+      <div class="col-12 col-lg-7">
+        <div class="card shadow-sm h-100">
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h2 class="h6 fw-bold mb-0">SQLi маршрут</h2>
+              <span class="small text-secondary">🟢 Завършен • 🟡 Текущ • 🔒 Заключен</span>
+            </div>
+
+            <div class="skill-tree">
+              <?php foreach ($treeLabs as $node): ?>
+                <?php
+                  $status = $node['status'] ?? 'locked';
+                  $canOpen = $status !== 'locked' && !empty($node['path']);
+                  $label = $labTitles[$node['code']] ?? ($node['label'] ?? $node['code']);
+                  $short = $labShort[$node['code']] ?? ($node['label'] ?? $node['code']);
+                ?>
+                <div class="skill-node <?php echo htmlspecialchars($status); ?>">
+                  <?php if ($canOpen): ?>
+                    <a class="text-decoration-none" href="<?php echo htmlspecialchars($node['path']); ?>">
+                      <strong><?php echo htmlspecialchars($short); ?></strong>
+                      <span class="text-secondary">— <?php echo htmlspecialchars($label); ?></span>
+                    </a>
+                  <?php else: ?>
+                    <span class="text-secondary">
+                      <strong><?php echo htmlspecialchars($short); ?></strong>
+                      — <?php echo htmlspecialchars($label); ?>
+                    </span>
+                  <?php endif; ?>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="col-12 col-lg-4">
-        <div class="card shadow-sm">
+      <div class="col-12 col-lg-5">
+        <div class="card shadow-sm mb-3">
           <div class="card-body">
-            <h2 class="h6 fw-bold mb-3">Бърза статистика</h2>
-            <div class="d-flex justify-content-between">
-              <span class="text-secondary">Общо опити</span>
-              <span class="fw-semibold"><?php echo (int)$attemptsTotal; ?></span>
-            </div>
-            <div class="d-flex justify-content-between mt-1">
-              <span class="text-secondary">Успешни</span>
-              <span class="fw-semibold"><?php echo (int)$successTotal; ?></span>
-            </div>
-            <hr>
-            <div class="text-secondary small">
-              Последна активност:
-              <strong>
-                <?php echo $lastAttemptAt ? htmlspecialchars($lastAttemptAt) : '—'; ?>
-              </strong>
-            </div>
-            <div class="mt-3 p-3 rounded-4 bg-light border">
-              <div class="fw-semibold mb-1">Точкова система (в процес)</div>
-              <div class="text-secondary small">
-                Скоро ще виждаш точки, бонуси и класация директно тук.
+            <div class="d-flex align-items-start justify-content-between">
+              <div>
+                <h2 class="h6 fw-bold mb-1">Следващо упражнение</h2>
+                <?php if (!empty($nextModule)): ?>
+                  <?php
+                    $nextCode = (string)($nextModule['code'] ?? '');
+                    $nextTitle = $labTitles[$nextCode] ?? ($nextModule['label'] ?? $nextCode);
+                    $nextGoal = $labGoals[$nextCode] ?? 'Изпълни задачата и отключи следващия модул.';
+                    $nextDiff = $labDifficulty[$nextCode] ?? '—';
+                  ?>
+                  <div class="text-secondary small mb-2"><?php echo htmlspecialchars($nextTitle); ?></div>
+                  <span class="badge text-bg-secondary rounded-pill"><?php echo htmlspecialchars($nextDiff); ?></span>
+                <?php else: ?>
+                  <div class="text-secondary small mb-2">Всичко е завършено</div>
+                  <span class="badge text-bg-success rounded-pill">Готово</span>
+                <?php endif; ?>
               </div>
             </div>
+
+            <div class="mt-3 text-secondary small">
+              <?php if (!empty($nextModule)): ?>
+                <?php echo htmlspecialchars($nextGoal); ?>
+              <?php else: ?>
+                Няма следващи модули. Прегледай таблото или профила.
+              <?php endif; ?>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mt-3">
+              <?php if (!empty($nextModule['path'])): ?>
+                <a class="btn btn-brand" href="<?php echo htmlspecialchars($nextModule['path']); ?>">▶ Старт</a>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
+
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h2 class="h6 fw-bold mb-0">Класация</h2>
+              <span class="small text-secondary">Топ 10</span>
+            </div>
+
+            <?php if (empty($leaderboard)): ?>
+              <div class="text-secondary small">Още няма точки за класация.</div>
+            <?php else: ?>
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                  <thead>
+                    <tr class="text-secondary small">
+                      <th>#</th>
+                      <th>User</th>
+                      <th class="text-end">Points</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php $rank = 1; ?>
+                    <?php foreach ($leaderboard as $row): ?>
+                      <?php
+                        $rowId = (int)($row['id'] ?? 0);
+                        $isMe = $rowId === $userId;
+                      ?>
+                      <tr class="<?php echo $isMe ? 'table-warning' : ''; ?>">
+                        <td><?php echo (int)$rank; ?></td>
+                        <td>
+                          <?php echo htmlspecialchars((string)($row['username'] ?? '—')); ?>
+                          <?php if ($isMe): ?> ⭐<?php endif; ?>
+                        </td>
+                        <td class="text-end"><?php echo (int)($row['points'] ?? 0); ?></td>
+                      </tr>
+                      <?php $rank++; ?>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+
+              <?php if ($userRank !== null && $userRank > 10): ?>
+                <div class="small text-secondary mt-2">
+                  Ти – №<?php echo (int)$userRank; ?> (<?php echo (int)$userPoints; ?> точки)
+                </div>
+              <?php endif; ?>
+            <?php endif; ?>
           </div>
         </div>
       </div>
@@ -310,10 +522,15 @@ bs_layout_start('SQLi Training Platform');
     <div class="col-12 col-lg-4">
       <div class="card shadow-sm h-100">
         <div class="card-body">
-          <h3 class="h6 fw-bold mb-2">Мотивация</h3>
-          <p class="text-secondary mb-0">
-            Малки стъпки, много практика. По-доброто разбиране идва от опитите.
-          </p>
+          <h3 class="h6 fw-bold mb-2">Фокус</h3>
+          <div class="text-secondary small">
+            <?php if (!empty($nextModule)): ?>
+              Следващата цел е: <strong><?php echo htmlspecialchars($labTitles[(string)($nextModule['code'] ?? '')] ?? '—'); ?></strong><br>
+              <?php echo htmlspecialchars($labGoals[(string)($nextModule['code'] ?? '')] ?? 'Завърши задачата, за да отключиш следващия модул.'); ?>
+            <?php else: ?>
+              Няма следващи модули. Провери таблото за детайли.
+            <?php endif; ?>
+          </div>
         </div>
       </div>
     </div>
@@ -328,6 +545,7 @@ bs_layout_start('SQLi Training Platform');
       </div>
     </div>
   </div>
+  <?php endif; ?>
 <?php endif; ?>
 
 <script>

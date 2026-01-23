@@ -1,26 +1,45 @@
 <?php
 /**
- * Points / CTF helpers
+ * Automatic Points on LAB completion (no flags).
  *
- * Security note:
- * - Never store plaintext flags in DB.
- * - We store only flag_hash (HMAC-SHA256) using a server-side pepper.
- *
- * Setup:
- * 1) Change POINTS_PEPPER to something long and secret.
- * 2) Generate hashes for your flags and put them in DB (challenges.flag_hash).
- *
- * Quick hash helper:
- * - Temporarily call points_hash_flag('SQLI{demo}') somewhere and echo it,
- *   OR use /public/ctf.php debug block (only for admin/dev).
+ * начислява точки 1 път на LAB completion (LAB1..LAB5)
+ * penalty: -2 точки за всеки допълнителен опит (след първия)
+ * минимум: 30% от base points
  */
 
-const POINTS_PEPPER = 'CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_STRING_>=_32_CHARS';
+function points_base_for_lab(string $labCode): int {
+    $map = [
+        'LAB0_INTRO'         => 10,
+        'LAB1_AUTH_BYPASS'   => 50,
+        'LAB2_BOOLEAN_BLIND' => 80,
+        'LAB3_UNION_BASED'   => 100,
+        'LAB4_ERROR_BASED'   => 120,
+        'LAB5_TIME_BASED'    => 150,
+    ];
+    return (int)($map[$labCode] ?? 0);
+}
 
-function points_hash_flag(string $flag): string {
-    $flag = trim($flag);
-    // HMAC is better than plain sha256(flag+pepper) because pepper acts as key
-    return hash_hmac('sha256', $flag, POINTS_PEPPER);
+/**
+ * map LAB_CODE -> attempt logger lab name (както се логва в practice.php)
+ * за да вземем attempts_count от attempts_agg_user_lab
+ */
+function points_attempt_lab_key(string $labCode): ?string {
+    $map = [
+        'LAB1_AUTH_BYPASS'   => 'lab1_practice',
+        'LAB2_BOOLEAN_BLIND' => 'lab2_practice',
+        'LAB3_UNION_BASED'   => 'lab3_practice',
+        'LAB4_ERROR_BASED'   => 'lab4_practice',
+        'LAB5_TIME_BASED'    => 'lab5_practice',
+    ];
+    return $map[$labCode] ?? null;
+}
+
+function points_calculate_award(int $base, int $attemptsUsed): int {
+    $attemptsUsed = max(1, $attemptsUsed);
+    $penalty = ($attemptsUsed - 1) * 2;
+    $floor = (int)round($base * 0.30);
+    $bonus = ($attemptsUsed === 1) ? 10 : 0;
+    return max($floor, $base - $penalty) + $bonus;
 }
 
 function points_get_user_points(mysqli $conn, int $userId): int {
@@ -37,84 +56,6 @@ function points_get_user_points(mysqli $conn, int $userId): int {
     return $pts;
 }
 
-function points_is_solved(mysqli $conn, int $userId, int $challengeId): bool {
-    $stmt = mysqli_prepare($conn, "SELECT 1 FROM user_challenge_solves WHERE user_id = ? AND challenge_id = ? LIMIT 1");
-    if (!$stmt) return false;
-    mysqli_stmt_bind_param($stmt, "ii", $userId, $challengeId);
-    mysqli_stmt_execute($stmt);
-    $res = mysqli_stmt_get_result($stmt);
-    $ok = (bool)($res && mysqli_fetch_assoc($res));
-    mysqli_stmt_close($stmt);
-    return $ok;
-}
-
-/**
- * Increment attempts counter for (user, challenge) and return new attempts_count.
- */
-function points_increment_attempt(mysqli $conn, int $userId, int $challengeId): int {
-    // Try update first
-    $stmt = mysqli_prepare($conn, "
-        UPDATE user_flag_attempts
-        SET attempts_count = attempts_count + 1, last_attempt_at = NOW()
-        WHERE user_id = ? AND challenge_id = ?
-    ");
-    if ($stmt) {
-        mysqli_stmt_bind_param($stmt, "ii", $userId, $challengeId);
-        mysqli_stmt_execute($stmt);
-        $affected = mysqli_stmt_affected_rows($stmt);
-        mysqli_stmt_close($stmt);
-
-        if ($affected > 0) {
-            // fetch current attempts_count
-            $stmt2 = mysqli_prepare($conn, "SELECT attempts_count FROM user_flag_attempts WHERE user_id=? AND challenge_id=? LIMIT 1");
-            if (!$stmt2) return 1;
-            mysqli_stmt_bind_param($stmt2, "ii", $userId, $challengeId);
-            mysqli_stmt_execute($stmt2);
-            $res = mysqli_stmt_get_result($stmt2);
-            $count = 1;
-            if ($res && ($row = mysqli_fetch_assoc($res))) $count = (int)($row['attempts_count'] ?? 1);
-            mysqli_stmt_close($stmt2);
-            return max(1, $count);
-        }
-    }
-
-    // Insert if missing
-    $stmt3 = mysqli_prepare($conn, "
-        INSERT INTO user_flag_attempts (user_id, challenge_id, attempts_count, last_attempt_at)
-        VALUES (?, ?, 1, NOW())
-        ON DUPLICATE KEY UPDATE attempts_count = attempts_count + 1, last_attempt_at = NOW()
-    ");
-    if (!$stmt3) return 1;
-    mysqli_stmt_bind_param($stmt3, "ii", $userId, $challengeId);
-    mysqli_stmt_execute($stmt3);
-    mysqli_stmt_close($stmt3);
-
-    // Read
-    $stmt4 = mysqli_prepare($conn, "SELECT attempts_count FROM user_flag_attempts WHERE user_id=? AND challenge_id=? LIMIT 1");
-    if (!$stmt4) return 1;
-    mysqli_stmt_bind_param($stmt4, "ii", $userId, $challengeId);
-    mysqli_stmt_execute($stmt4);
-    $res = mysqli_stmt_get_result($stmt4);
-    $count = 1;
-    if ($res && ($row = mysqli_fetch_assoc($res))) $count = (int)($row['attempts_count'] ?? 1);
-    mysqli_stmt_close($stmt4);
-
-    return max(1, $count);
-}
-
-/**
- * Points formula:
- * - base points
- * - penalty: -2 points per extra attempt beyond first
- * - minimum floor: 30% of base (so it never becomes 0)
- */
-function points_calculate_award(int $base, int $attemptsUsed): int {
-    $attemptsUsed = max(1, $attemptsUsed);
-    $penalty = ($attemptsUsed - 1) * 2;
-    $floor = (int)round($base * 0.30);
-    return max($floor, $base - $penalty);
-}
-
 function points_add_ledger(mysqli $conn, int $userId, int $delta, string $reason, ?string $refType=null, ?int $refId=null, ?string $note=null): void {
     $stmt = mysqli_prepare($conn, "
         INSERT INTO user_points_ledger (user_id, delta, reason, ref_type, ref_id, note)
@@ -124,4 +65,82 @@ function points_add_ledger(mysqli $conn, int $userId, int $delta, string $reason
     mysqli_stmt_bind_param($stmt, "iissis", $userId, $delta, $reason, $refType, $refId, $note);
     mysqli_stmt_execute($stmt);
     mysqli_stmt_close($stmt);
+}
+
+/**
+ * Award points on LAB completion (only once per user+lab_code).
+ * Returns awarded points (0 if already awarded or not eligible).
+ */
+function points_award_for_lab_completion(mysqli $conn, int $userId, string $labCode): int {
+    if ($userId <= 0) return 0;
+    if (function_exists('is_admin') && is_admin()) return 0;
+
+    $base = points_base_for_lab($labCode);
+    if ($base <= 0) return 0; // ignore LAB0 and unknown labs
+
+    // prevent duplicate awards
+    mysqli_begin_transaction($conn);
+    try {
+        $stmtIns = mysqli_prepare($conn, "
+            INSERT INTO user_lab_rewards (user_id, lab_code, points_awarded, awarded_at)
+            VALUES (?, ?, 0, NOW())
+        ");
+        if (!$stmtIns) {
+            mysqli_rollback($conn);
+            return 0;
+        }
+        mysqli_stmt_bind_param($stmtIns, "is", $userId, $labCode);
+        mysqli_stmt_execute($stmtIns);
+
+        // If duplicate, insert fails with error 1062; treat as already awarded
+        if (mysqli_stmt_errno($stmtIns) === 1062) {
+            mysqli_stmt_close($stmtIns);
+            mysqli_commit($conn);
+            return 0;
+        }
+        $rewardId = mysqli_insert_id($conn);
+        mysqli_stmt_close($stmtIns);
+
+        // determine attempts used from aggregates for practice key
+        $attemptKey = points_attempt_lab_key($labCode);
+        $attemptsUsed = 1;
+
+        if ($attemptKey) {
+            $stmtA = mysqli_prepare($conn, "
+                SELECT attempts_count
+                FROM attempts_agg_user_lab
+                WHERE user_id = ? AND lab = ?
+                LIMIT 1
+            ");
+            if ($stmtA) {
+                mysqli_stmt_bind_param($stmtA, "is", $userId, $attemptKey);
+                mysqli_stmt_execute($stmtA);
+                $res = mysqli_stmt_get_result($stmtA);
+                if ($res && ($row = mysqli_fetch_assoc($res))) {
+                    $attemptsUsed = max(1, (int)($row['attempts_count'] ?? 1));
+                }
+                mysqli_stmt_close($stmtA);
+            }
+        }
+
+        $award = points_calculate_award($base, $attemptsUsed);
+
+        // update reward row with actual points
+        $stmtUp = mysqli_prepare($conn, "UPDATE user_lab_rewards SET points_awarded = ? WHERE id = ?");
+        if ($stmtUp) {
+            mysqli_stmt_bind_param($stmtUp, "ii", $award, $rewardId);
+            mysqli_stmt_execute($stmtUp);
+            mysqli_stmt_close($stmtUp);
+        }
+
+        // ledger
+        points_add_ledger($conn, $userId, $award, 'lab_completed', 'lab', null, $labCode . ' (attempts=' . $attemptsUsed . ')');
+
+        mysqli_commit($conn);
+        return $award;
+
+    } catch (Throwable $e) {
+        mysqli_rollback($conn);
+        return 0;
+    }
 }

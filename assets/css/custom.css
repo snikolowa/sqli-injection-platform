@@ -57,3 +57,78 @@
 
 /* Small polish */
 .rounded-4{ border-radius: 18px !important; }
+
+/* Navbar */
+.nav-avatar{
+  width: 24px;
+  height: 24px;
+  font-size: .75rem;
+}
+.nav-link.nav-active{
+  font-weight: 600;
+  position: relative;
+}
+.nav-link.nav-active::after{
+  content: "";
+  display: block;
+  height: 2px;
+  background: var(--brand);
+  border-radius: 2px;
+  margin-top: 4px;
+}
+
+/* Skill tree */
+.skill-tree{
+  position: relative;
+  padding-left: 20px;
+}
+.skill-tree::before{
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: #dee2e6;
+}
+.skill-node{
+  position: relative;
+  padding: 8px 0 8px 24px;
+}
+.skill-node::before{
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 16px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #adb5bd;
+  box-shadow: 0 0 0 2px #dee2e6;
+}
+.skill-node.completed::before{ background: #198754; }
+.skill-node.current::before{ background: #ffc107; }
+.skill-node.locked::before{ background: #6c757d; }
+
+/* Module cards */
+.module-card{
+  min-height: 240px;
+}
+.module-card .module-title{
+  min-height: 2.6em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.module-card .module-header{
+  min-height: 70px;
+}
+.module-card .module-actions{
+  margin-top: auto;
+}
+
+.btn-compact{
+  padding: .4rem .9rem;
+  font-size: .9rem;
+}

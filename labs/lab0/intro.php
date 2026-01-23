@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/auth.php';
 require_login();
+require_not_admin();
 
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';

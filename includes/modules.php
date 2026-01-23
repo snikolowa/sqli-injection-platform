@@ -2,7 +2,7 @@
 
 function get_modules_ordered(): array {
   return [
-    ['code' => 'LAB0_INTRO',         'path' => '/sqli-platform/labs/lab0/intro.php',      'label' => 'Модул 0'],
+    ['code' => 'LAB0_INTRO',         'path' => '/sqli-platform/labs/lab0/intro.php',      'label' => 'Въведение'],
     ['code' => 'LAB1_AUTH_BYPASS',   'path' => '/sqli-platform/labs/lab1/step1.php',      'label' => 'Модул 1'],
     ['code' => 'LAB2_BOOLEAN_BLIND', 'path' => '/sqli-platform/labs/lab2/step1.php',      'label' => 'Модул 2'],
     ['code' => 'LAB3_UNION_BASED',   'path' => '/sqli-platform/labs/lab3/step1.php',      'label' => 'Модул 3'],

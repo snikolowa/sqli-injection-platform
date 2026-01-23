@@ -17,12 +17,30 @@ $modules = get_modules_ordered();
 
 // Friendly titles for UI (you can tweak text freely)
 $titles = [
-  'LAB0_INTRO' => 'Въведение в SQL Injection',
+  'LAB0_INTRO' => 'SQL Injection Basics',
   'LAB1_AUTH_BYPASS' => 'Authentication Bypass',
   'LAB2_BOOLEAN_BLIND' => 'Boolean-based Blind SQLi',
   'LAB3_UNION_BASED' => 'UNION-based SQLi',
   'LAB4_ERROR_BASED' => 'Error-based SQLi',
   'LAB5_TIME_BASED' => 'Time-based Blind SQLi',
+];
+
+$difficulty = [
+  'LAB0_INTRO' => 'Въведение',
+  'LAB1_AUTH_BYPASS' => 'Лесно',
+  'LAB2_BOOLEAN_BLIND' => 'Средно',
+  'LAB3_UNION_BASED' => 'Средно',
+  'LAB4_ERROR_BASED' => 'Трудно',
+  'LAB5_TIME_BASED' => 'Трудно',
+];
+
+$goals = [
+  'LAB0_INTRO' => 'Започни с основите и отключи модулите.',
+  'LAB1_AUTH_BYPASS' => 'Влез като админ чрез логически bypass.',
+  'LAB2_BOOLEAN_BLIND' => 'Потвърди факт чрез true/false отговори.',
+  'LAB3_UNION_BASED' => 'Извлечи данни чрез UNION заявки.',
+  'LAB4_ERROR_BASED' => 'Използвай грешки за извличане на информация.',
+  'LAB5_TIME_BASED' => 'Потвърди условие чрез време за отговор.',
 ];
 
 // Build labs array with prereq chain (based on order)
@@ -70,6 +88,15 @@ foreach ($labs as $lab) {
 }
 
 $percent = $totalLabs > 0 ? (int)round(($completedCount / $totalLabs) * 100) : 0;
+$currentCode = null;
+foreach ($labs as $lab) {
+  $done = !empty($progressMap[$lab['code']]) &&
+          (int)$progressMap[$lab['code']]['completed'] === 1;
+  if (!$done) {
+    $currentCode = $lab['code'];
+    break;
+  }
+}
 
 // ---- User aggregates (attempts) ----
 $attemptsTotal = 0;
@@ -89,6 +116,43 @@ if ($stmtA) {
   mysqli_stmt_close($stmtA);
 }
 
+// ---- Last solved lab ----
+$lastSolved = null;
+$stmtLast = mysqli_prepare($conn, "
+  SELECT lab_code, completed_at
+  FROM user_progress
+  WHERE user_id = ? AND completed = 1
+  ORDER BY completed_at DESC
+  LIMIT 1
+");
+if ($stmtLast) {
+  mysqli_stmt_bind_param($stmtLast, 'i', $userId);
+  mysqli_stmt_execute($stmtLast);
+  $rs = mysqli_stmt_get_result($stmtLast);
+  if ($rs && ($row = mysqli_fetch_assoc($rs))) {
+    $lastSolved = $row;
+  }
+  mysqli_stmt_close($stmtLast);
+}
+
+// ---- Last points award ----
+$lastReward = null;
+$stmtReward = mysqli_prepare($conn, "
+  SELECT delta, note, created_at
+  FROM user_points_ledger
+  WHERE user_id = ?
+  ORDER BY created_at DESC
+  LIMIT 1
+");
+if ($stmtReward) {
+  mysqli_stmt_bind_param($stmtReward, 'i', $userId);
+  mysqli_stmt_execute($stmtReward);
+  $rr = mysqli_stmt_get_result($stmtReward);
+  if ($rr && ($row = mysqli_fetch_assoc($rr))) {
+    $lastReward = $row;
+  }
+  mysqli_stmt_close($stmtReward);
+}
 // ---- Per-lab aggregates (for a small “most practiced” insight) ----
 $mostTriedLab = null;
 $mostTriedCount = 0;
@@ -154,45 +218,37 @@ bs_layout_start('Табло');
       </div>
     </div>
 
-    <div class="mb-2 d-flex justify-content-between">
-      <span class="fw-semibold">Прогрес</span>
-      <span class="text-secondary small">Следващ модул: <strong>Continue</strong></span>
-    </div>
+    <?php if (empty($progressMap['LAB0_INTRO'])): ?>
+      <div class="alert alert-warning rounded-4">
+        👋 Започни с Intro, за да отключиш платформата.
+      </div>
+    <?php endif; ?>
 
-    <div class="progress mb-2" style="height:14px">
-      <div class="progress-bar" style="width: <?php echo $percent; ?>%"></div>
+    <div class="row g-3">
+      <div class="col-12">
+        <div class="p-3 rounded-4 border bg-light h-100">
+          <div class="d-flex justify-content-between mb-2">
+            <span class="fw-semibold">Общ прогрес</span>
+            <span class="text-secondary small"><?php echo $percent; ?>%</span>
+          </div>
+          <div class="progress mb-2" style="height:14px">
+            <div class="progress-bar" style="width: <?php echo $percent; ?>%"></div>
+          </div>
+          <div class="text-secondary small">
+            Последно решено:
+            <strong>
+              <?php echo $lastSolved ? htmlspecialchars($titles[$lastSolved['lab_code']] ?? (string)$lastSolved['lab_code']) : '—'; ?>
+            </strong>
+          </div>
+          <div class="text-secondary small mt-1">
+            Последна активност: <strong><?php echo $lastAttemptAt ? htmlspecialchars((string)$lastAttemptAt) : '—'; ?></strong>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="d-flex flex-wrap gap-2 mt-3">
       <a class="btn btn-brand" href="<?php echo htmlspecialchars($nextLabPath); ?>">Продължи</a>
-      <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/profile.php">Профил</a>
-      <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/index.php">Начало</a>
-    </div>
-
-    <div class="row g-3 mt-3">
-      <div class="col-12 col-lg-4">
-        <div class="p-3 rounded-4 border bg-light h-100">
-          <div class="text-secondary small">Общо опити</div>
-          <div class="h4 fw-bold mb-0"><?php echo (int)$attemptsTotal; ?></div>
-          <div class="text-secondary small mt-1">Успешни: <strong><?php echo (int)$successTotal; ?></strong></div>
-        </div>
-      </div>
-      <div class="col-12 col-lg-4">
-        <div class="p-3 rounded-4 border bg-light h-100">
-          <div class="text-secondary small">Последна активност</div>
-          <div class="fw-semibold"><?php echo $lastAttemptAt ? htmlspecialchars((string)$lastAttemptAt) : '—'; ?></div>
-          <div class="text-secondary small mt-1">От агрегати</div>
-        </div>
-      </div>
-      <div class="col-12 col-lg-4">
-        <div class="p-3 rounded-4 border bg-light h-100">
-          <div class="text-secondary small">Най-практикувано упражнение</div>
-          <div class="fw-semibold"><?php echo $mostTriedLab ? htmlspecialchars($mostTriedLab) : '—'; ?></div>
-          <div class="text-secondary small mt-1">
-            <?php echo $mostTriedLab ? ('Опити: <strong>' . (int)$mostTriedCount . '</strong>') : 'Няма данни още'; ?>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -200,10 +256,10 @@ bs_layout_start('Табло');
     <div class="card-body">
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h2 class="h5 fw-bold mb-0">Модули</h2>
-        <span class="small text-secondary">Locked докато не завършиш prerequisite</span>
+        <span class="small text-secondary">Заключено докато не завършиш предишния модул</span>
       </div>
 
-      <div class="list-group">
+      <div class="row g-3">
         <?php foreach ($labs as $lab): ?>
           <?php
             $done = !empty($progressMap[$lab['code']]) &&
@@ -217,37 +273,39 @@ bs_layout_start('Табло');
                         (int)($progressMap[$prereq]['completed'] ?? 0) !== 1;
             }
 
-            $type = $lab['type'] ?? 'lab';
+            $isCurrent = ($lab['code'] ?? '') === $currentCode;
+            $status = $done ? 'Завършен' : ($locked ? 'Заключен' : 'В процес');
+            $statusBadge = $done ? 'text-bg-success' : ($locked ? 'text-bg-danger' : 'text-bg-warning');
+            $progressLab = $done ? 100 : ($locked ? 0 : 45);
           ?>
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm module-card <?php echo $locked ? 'opacity-75' : ''; ?>">
+              <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-start mb-2 module-header">
+                  <div>
+                    <div class="text-secondary small"><?php echo htmlspecialchars($lab['short']); ?></div>
+                    <div class="fw-semibold module-title"><?php echo htmlspecialchars($lab['title']); ?></div>
+                  </div>
+                  <span class="badge <?php echo $statusBadge; ?> rounded-pill"><?php echo $status; ?><?php echo $locked ? ' 🔒' : ''; ?></span>
+                </div>
 
-          <?php if ($locked): ?>
-            <div class="list-group-item d-flex justify-content-between align-items-center opacity-75">
-              <span>
-                <strong><?php echo htmlspecialchars($lab['short']); ?>:</strong>
-                <?php echo htmlspecialchars($lab['title']); ?>
-              </span>
-              <span class="badge text-bg-secondary rounded-pill">Locked 🔒</span>
+                <div class="text-secondary small">Упражнения: <?php echo $done ? '1/1' : '0/1'; ?></div>
+                <div class="progress mt-2" style="height: 8px;">
+                  <div class="progress-bar <?php echo $done ? 'bg-success' : ($isCurrent ? 'bg-warning' : ''); ?>" style="width: <?php echo (int)$progressLab; ?>%"></div>
+                </div>
+
+                <div class="mt-3 module-actions">
+                  <?php if ($locked): ?>
+                    <button class="btn btn-outline-secondary btn-compact" disabled>Заключено</button>
+                  <?php else: ?>
+                    <a class="btn <?php echo $done ? 'btn-success' : ($isCurrent ? 'btn-warning' : 'btn-brand'); ?> btn-compact" href="<?php echo htmlspecialchars($lab['path']); ?>">
+                      <?php echo $done ? 'Преглед' : 'Започни'; ?>
+                    </a>
+                  <?php endif; ?>
+                </div>
+              </div>
             </div>
-          <?php else: ?>
-            <a href="<?php echo htmlspecialchars($lab['path']); ?>"
-               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-              <span>
-                <strong><?php echo htmlspecialchars($lab['short']); ?>:</strong>
-                <?php echo htmlspecialchars($lab['title']); ?>
-              </span>
-
-              <?php if ($done): ?>
-                <span class="badge text-bg-success rounded-pill">Завършен</span>
-              <?php else: ?>
-                <?php if ($type === 'intro'): ?>
-                  <span class="badge text-bg-secondary rounded-pill">Прочети</span>
-                <?php else: ?>
-                  <span class="badge text-bg-primary rounded-pill">Започни</span>
-                <?php endif; ?>
-              <?php endif; ?>
-            </a>
-          <?php endif; ?>
-
+          </div>
         <?php endforeach; ?>
       </div>
     </div>
@@ -255,45 +313,17 @@ bs_layout_start('Табло');
 
   <!-- Extra section at the end (so it doesn't feel empty) -->
   <div class="row g-3">
-    <div class="col-12 col-lg-4">
+    <div class="col-12">
       <div class="card shadow-sm h-100">
         <div class="card-body">
-          <h3 class="h6 fw-bold mb-2">Как да напредваш по-бързо</h3>
+          <h3 class="h6 fw-bold mb-2">🧠 Съвети</h3>
           <ul class="text-secondary mb-0">
-            <li>Първо прочети Step 1 (обясненията).</li>
-            <li>След това повтори в Practice, докато стане естествено.</li>
-            <li>Пиши си “payload notes” — най-работещото за памет.</li>
+            <li>Прочети целта внимателно, преди да започнеш. Знай какво точно трябва да постигнеш.</li>
+            <li>Помисли как изглежда SQL заявката зад формата – таблици, колони и условия.</li>
+            <li>Реши упражнението повече от веднъж, използвайки различни подходи.</li>
+            <li>Записвай си работещите заявки и причината да работят.</li>
+            <li>Използвай грешките като насока, а не като пречка.</li>
           </ul>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12 col-lg-4">
-      <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <h3 class="h6 fw-bold mb-2">Точкова система (CTF-style) – скоро</h3>
-          <p class="text-secondary mb-2">
-            Ще има точки по упражнение + бонуси/наказания (опити, hints) и класация.
-          </p>
-          <div class="p-3 rounded-4 border bg-light">
-            <div class="small text-secondary">Идеи за badges:</div>
-            <div class="small">
-              <span class="badge text-bg-secondary rounded-pill">First blood</span>
-              <span class="badge text-bg-secondary rounded-pill">No hints</span>
-              <span class="badge text-bg-secondary rounded-pill">3 wins streak</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12 col-lg-4">
-      <div class="card shadow-sm h-100">
-        <div class="card-body">
-          <h3 class="h6 fw-bold mb-2">Безопасност</h3>
-          <p class="text-secondary mb-0">
-            Тези техники са само за контролирана среда. Не ги използвай върху реални системи без разрешение.
-          </p>
         </div>
       </div>
     </div>
