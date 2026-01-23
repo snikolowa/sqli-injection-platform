@@ -6,9 +6,11 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 require_once __DIR__ . '/../../includes/modules.php';
+require_once __DIR__ . '/../../includes/attempt_logger.php';
 
 $LAB_CODE = "LAB3_UNION_BASED";
 $userId = (int)($_SESSION['user_id'] ?? 0);
+$usernameSess = (string)($_SESSION['username'] ?? '');
 require_prereq_or_block($conn, $userId, 'LAB2_BOOLEAN_BLIND');
 
 $q = '';
@@ -48,20 +50,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "Възникна грешка при търсенето. Опитай с различна заявка.";
     }
 
+    // ✅ Log attempt to file + aggregates
     $lab = "lab3_practice";
-    $mode = "vuln";
     $successInt = $completedNow ? 1 : 0;
-
-    $stmtLog = mysqli_prepare(
-        $conn,
-        "INSERT INTO attempts (lab, mode, username_input, success)
-         VALUES (?, ?, ?, ?)"
-    );
-    if ($stmtLog) {
-        mysqli_stmt_bind_param($stmtLog, "sssi", $lab, $mode, $q, $successInt);
-        mysqli_stmt_execute($stmtLog);
-        mysqli_stmt_close($stmtLog);
-    }
+    log_attempt($conn, $userId, $usernameSess, $lab, $successInt, (string)$q);
 
     if ($completedNow && $userId > 0) {
         $stmt = mysqli_prepare($conn, "
@@ -108,6 +100,9 @@ bs_layout_start('Lab 3 – Practice');
       </div>
     <?php endif; ?>
 
+    <!-- Used by hints-timer.js: reveal all hints after solving -->
+    <div id="exercise-status" data-solved="<?php echo $completedNow ? '1' : '0'; ?>"></div>
+
     <form method="post" class="mt-3" autocomplete="off">
       <label class="form-label fw-semibold">Search (име на продукт):</label>
       <input type="text" name="q" class="form-control" required
@@ -153,13 +148,16 @@ bs_layout_start('Lab 3 – Practice');
 
     <!-- Hidden hints -->
     <div class="collapse mt-3" id="hintsSection">
-      <div class="accordion" id="lab3Hints">
+      <!-- IMPORTANT: data-hints enables timed hints -->
+      <div class="accordion" id="lab3Hints" data-hints>
 
         <div class="accordion-item">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#l3h1">
+                    data-bs-toggle="collapse" data-bs-target="#l3h1"
+                    data-hint-unlock="300" disabled>
               Подсказка 1: Колко колони виждаш на екрана?
+              <span class="ms-2 small text-secondary" data-hint-countdown></span>
             </button>
           </h2>
           <div id="l3h1" class="accordion-collapse collapse" data-bs-parent="#lab3Hints">
@@ -172,8 +170,10 @@ bs_layout_start('Lab 3 – Practice');
         <div class="accordion-item">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#l3h2">
+                    data-bs-toggle="collapse" data-bs-target="#l3h2"
+                    data-hint-unlock="600" disabled>
               Подсказка 2: Какво означава успех в този lab?
+              <span class="ms-2 small text-secondary" data-hint-countdown></span>
             </button>
           </h2>
           <div id="l3h2" class="accordion-collapse collapse" data-bs-parent="#lab3Hints">
@@ -186,8 +186,10 @@ bs_layout_start('Lab 3 – Practice');
         <div class="accordion-item">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#l3h3">
+                    data-bs-toggle="collapse" data-bs-target="#l3h3"
+                    data-hint-unlock="900" disabled>
               Подсказка 3: Ако има много резултати?
+              <span class="ms-2 small text-secondary" data-hint-countdown></span>
             </button>
           </h2>
           <div id="l3h3" class="accordion-collapse collapse" data-bs-parent="#lab3Hints">
@@ -205,17 +207,17 @@ bs_layout_start('Lab 3 – Practice');
         ✅ Модулът е успешно завършен и е записан в профила ти.
       </div>
 
-        <?php if (!empty($next)): ?>
-          <div class="d-flex justify-content-end mt-3">
-            <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
-              Към <?php echo htmlspecialchars($next['label']); ?> →
-            </a>
-          </div>
-        <?php else: ?>
-          <div class="alert alert-info mt-3 mb-0">
-            🎉 Това беше последният модул!
-          </div>
-        <?php endif; ?>
+      <?php if (!empty($next)): ?>
+        <div class="d-flex justify-content-end mt-3">
+          <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
+            Към <?php echo htmlspecialchars($next['label']); ?> →
+          </a>
+        </div>
+      <?php else: ?>
+        <div class="alert alert-info mt-3 mb-0">
+          🎉 Това беше последният модул!
+        </div>
+      <?php endif; ?>
     <?php endif; ?>
 
     <div class="small text-secondary mt-4">

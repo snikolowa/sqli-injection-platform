@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/lab_gate.php';
 require_once __DIR__ . '/../../includes/layout_bs.php';
 require_once __DIR__ . '/../../includes/modules.php';
+require_once __DIR__ . '/../../includes/attempt_logger.php';
 
 $LAB_CODE = "LAB1_AUTH_BYPASS";
 
@@ -14,6 +15,7 @@ $completedNow = false;
 $next = get_next_module($LAB_CODE);
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
+$usernameSess = (string)($_SESSION['username'] ?? '');
 
 require_prereq_or_block($conn, $userId, 'LAB0_INTRO');
 
@@ -37,20 +39,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $message = "Невалидни данни или неуспешен опит.";
     }
 
+    // ✅ Log attempt to file + aggregates (replaces DB attempts table)
     $lab = "lab1_practice";
-    $mode = "vuln";
     $successInt = $completedNow ? 1 : 0;
 
-    $stmtLog = mysqli_prepare(
-        $conn,
-        "INSERT INTO attempts (lab, mode, username_input, success)
-         VALUES (?, ?, ?, ?)"
-    );
-    if ($stmtLog) {
-        mysqli_stmt_bind_param($stmtLog, "sssi", $lab, $mode, $username, $successInt);
-        mysqli_stmt_execute($stmtLog);
-        mysqli_stmt_close($stmtLog);
-    }
+    // ⚠️ Не логваме паролата. Само username input.
+    log_attempt($conn, $userId, $usernameSess, $lab, $successInt, (string)$username);
 
     if ($completedNow && $userId > 0) {
         $stmt = mysqli_prepare($conn, "
@@ -98,6 +92,9 @@ bs_layout_start('Lab 1 – Practice');
       </div>
     <?php endif; ?>
 
+    <!-- Used by hints-timer.js: reveal all hints after solving -->
+    <div id="exercise-status" data-solved="<?php echo $completedNow ? '1' : '0'; ?>"></div>
+
     <!-- Login form -->
     <form method="post" class="row g-3 mt-2" autocomplete="off">
       <div class="col-12 col-md-6">
@@ -129,13 +126,16 @@ bs_layout_start('Lab 1 – Practice');
 
     <!-- Hidden hints -->
     <div class="collapse mt-3" id="hintsSection">
-      <div class="accordion" id="lab1Hints">
+      <!-- IMPORTANT: data-hints enables timed hints -->
+      <div class="accordion" id="lab1Hints" data-hints>
 
         <div class="accordion-item">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#hint1">
+                    data-bs-toggle="collapse" data-bs-target="#hint1"
+                    data-hint-unlock="300" disabled>
               Подсказка 1: Какво трябва да върне SQL заявката?
+              <span class="ms-2 small text-secondary" data-hint-countdown></span>
             </button>
           </h2>
           <div id="hint1" class="accordion-collapse collapse" data-bs-parent="#lab1Hints">
@@ -149,8 +149,10 @@ bs_layout_start('Lab 1 – Practice');
         <div class="accordion-item">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#hint2">
+                    data-bs-toggle="collapse" data-bs-target="#hint2"
+                    data-hint-unlock="600" disabled>
               Подсказка 2: Каква е ролята на OR?
+              <span class="ms-2 small text-secondary" data-hint-countdown></span>
             </button>
           </h2>
           <div id="hint2" class="accordion-collapse collapse" data-bs-parent="#lab1Hints">
@@ -164,8 +166,10 @@ bs_layout_start('Lab 1 – Practice');
         <div class="accordion-item">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#hint3">
+                    data-bs-toggle="collapse" data-bs-target="#hint3"
+                    data-hint-unlock="900" disabled>
               Подсказка 3: Какво правят SQL коментарите (-- )
+              <span class="ms-2 small text-secondary" data-hint-countdown></span>
             </button>
           </h2>
           <div id="hint3" class="accordion-collapse collapse" data-bs-parent="#lab1Hints">
@@ -179,8 +183,10 @@ bs_layout_start('Lab 1 – Practice');
         <div class="accordion-item">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#hint4">
+                    data-bs-toggle="collapse" data-bs-target="#hint4"
+                    data-hint-unlock="1200" disabled>
               Подсказка 4: Ако не става?
+              <span class="ms-2 small text-secondary" data-hint-countdown></span>
             </button>
           </h2>
           <div id="hint4" class="accordion-collapse collapse" data-bs-parent="#lab1Hints">
@@ -203,17 +209,17 @@ bs_layout_start('Lab 1 – Practice');
         ✅ Модулът е успешно завършен и е записан в профила ти.
       </div>
 
-        <?php if (!empty($next)): ?>
-          <div class="d-flex justify-content-end mt-3">
-            <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
-              Към <?php echo htmlspecialchars($next['label']); ?> →
-            </a>
-          </div>
-        <?php else: ?>
-          <div class="alert alert-info mt-3 mb-0">
-            🎉 Това беше последният модул!
-          </div>
-        <?php endif; ?>
+      <?php if (!empty($next)): ?>
+        <div class="d-flex justify-content-end mt-3">
+          <a class="btn btn-brand" href="<?php echo htmlspecialchars($next['path']); ?>">
+            Към <?php echo htmlspecialchars($next['label']); ?> →
+          </a>
+        </div>
+      <?php else: ?>
+        <div class="alert alert-info mt-3 mb-0">
+          🎉 Това беше последният модул!
+        </div>
+      <?php endif; ?>
     <?php endif; ?>
 
     <div class="small text-secondary mt-4">

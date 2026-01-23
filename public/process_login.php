@@ -16,7 +16,7 @@ if ($username === '' || $password === '') {
     exit;
 }
 
-$stmt = mysqli_prepare($conn, "SELECT id, password FROM users WHERE username = ?");
+$stmt = mysqli_prepare($conn, "SELECT id, username, role, password FROM users WHERE username = ?");
 if (!$stmt) {
     header("Location: login.php?error=1");
     exit;
@@ -31,6 +31,9 @@ if ($row = mysqli_fetch_assoc($res)) {
 
     if ($hash !== '' && password_verify($password, $hash)) {
         $_SESSION['user_id'] = (int)$row['id'];
+        $_SESSION['username'] = $row['username'] ?? $username;
+        $_SESSION['role'] = $row['role'] ?? 'user';
+
         mysqli_stmt_close($stmt);
 
         header("Location: dashboard.php");
