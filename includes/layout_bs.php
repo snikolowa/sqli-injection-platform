@@ -4,11 +4,6 @@
  * Includes timed hints JS.
  */
 
-/**
- * Base URL helper.
- * IMPORTANT: If your folder in htdocs is different, change it here.
- * Example: if project is in C:\xampp\htdocs\sqli-platform -> return '/sqli-platform';
- */
 function base_url(): string {
     return '/sqli-platform';
 }
@@ -50,6 +45,10 @@ function bs_layout_start(string $title): void {
                         <li class="nav-item">
                           <a class="nav-link" href="<?php echo $base; ?>/public/admin/index.php">Админ</a>
                         </li>
+                      <?php else: ?>
+                        <li class="nav-item">
+                          <a class="nav-link" href="<?php echo $base; ?>/public/ctf.php">CTF</a>
+                        </li>
                       <?php endif; ?>
 
                         <li class="nav-item">
@@ -67,6 +66,9 @@ function bs_layout_start(string $title): void {
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="<?php echo $base; ?>/public/labs.php">Модули</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="<?php echo $base; ?>/public/register.php">Регистрация</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="<?php echo $base; ?>/public/login.php">Вход</a>

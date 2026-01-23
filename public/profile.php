@@ -4,65 +4,17 @@ require_login();
 
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/layout_bs.php';
+require_once __DIR__ . '/../includes/modules.php';
+require_once __DIR__ . '/../includes/points.php';
+
+$base = base_url();
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
+$isAdmin = function_exists('is_admin') ? is_admin() : false;
 
-$modules = [
-  ['code' => 'LAB0_INTRO',         'label' => 'Модул 0', 'title' => 'Въведение в SQL Injection'],
-  ['code' => 'LAB1_AUTH_BYPASS',   'label' => 'Модул 1', 'title' => 'Authentication Bypass'],
-  ['code' => 'LAB2_BOOLEAN_BLIND', 'label' => 'Модул 2', 'title' => 'Boolean-based Blind SQLi'],
-  ['code' => 'LAB3_UNION_BASED',   'label' => 'Модул 3', 'title' => 'UNION-based SQLi'],
-  ['code' => 'LAB4_ERROR_BASED',   'label' => 'Модул 4', 'title' => 'Error-based SQLi'],
-  ['code' => 'LAB5_TIME_BASED',    'label' => 'Модул 5', 'title' => 'Time-based Blind SQLi'],
-];
-
-$modulePaths = [
-  'LAB0_INTRO'         => '/sqli-platform/labs/lab0/intro.php',
-  'LAB1_AUTH_BYPASS'   => '/sqli-platform/labs/lab1/step1.php',
-  'LAB2_BOOLEAN_BLIND' => '/sqli-platform/labs/lab2/step1.php',
-  'LAB3_UNION_BASED'   => '/sqli-platform/labs/lab3/step1.php',
-  'LAB4_ERROR_BASED'   => '/sqli-platform/labs/lab4/step1.php',
-  'LAB5_TIME_BASED'    => '/sqli-platform/labs/lab5/step1.php',
-];
-
-/**
- * Progress map
- */
-$progressMap = [];
-$stmt = mysqli_prepare(
-  $conn,
-  "SELECT lab_code, completed, completed_at
-   FROM user_progress
-   WHERE user_id = ?"
-);
-if ($stmt) {
-  mysqli_stmt_bind_param($stmt, "i", $userId);
-  mysqli_stmt_execute($stmt);
-  $res = mysqli_stmt_get_result($stmt);
-  while ($row = mysqli_fetch_assoc($res)) {
-    $progressMap[$row['lab_code']] = $row;
-  }
-  mysqli_stmt_close($stmt);
-}
-
-$firstLockedFound = false;
-$accessMap = [];
-foreach ($modules as $m) {
-  if (!$firstLockedFound) {
-    $accessMap[$m['code']] = true;
-    if (empty($progressMap[$m['code']]) || (int)$progressMap[$m['code']]['completed'] !== 1) {
-      $firstLockedFound = true;
-    }
-  } else {
-    $accessMap[$m['code']] = false;
-  }
-}
-
-/**
- * User data
- */
+// --- User basic data ---
 $userRow = null;
-$stmt = mysqli_prepare($conn, "SELECT username, first_name, last_name, email FROM users WHERE id = ?");
+$stmt = mysqli_prepare($conn, "SELECT username, first_name, last_name, email, COALESCE(role,'user') AS role FROM users WHERE id = ?");
 if ($stmt) {
   mysqli_stmt_bind_param($stmt, "i", $userId);
   mysqli_stmt_execute($stmt);
@@ -71,22 +23,71 @@ if ($stmt) {
   mysqli_stmt_close($stmt);
 }
 
-$username = $userRow['username'] ?? '';
-$email = $userRow['email'] ?? '';
-$fullName = trim(($userRow['first_name'] ?? '') . ' ' . ($userRow['last_name'] ?? ''));
+$username = (string)($userRow['username'] ?? '');
+$email = (string)($userRow['email'] ?? '');
+$role = (string)($userRow['role'] ?? 'user');
+$fullName = trim(((string)($userRow['first_name'] ?? '')) . ' ' . ((string)($userRow['last_name'] ?? '')));
 if ($fullName === '') $fullName = '—';
 
-/**
- * Progress
- */
-$total = count($modules);
-$completedCount = 0;
-foreach ($modules as $m) {
-  if (!empty($progressMap[$m['code']]) && (int)$progressMap[$m['code']]['completed'] === 1) {
-    $completedCount++;
+// --- Progress (only meaningful for normal users) ---
+$mainLabCodes = [
+  'LAB1_AUTH_BYPASS',
+  'LAB2_BOOLEAN_BLIND',
+  'LAB3_UNION_BASED',
+  'LAB4_ERROR_BASED',
+  'LAB5_TIME_BASED',
+];
+
+$completedMain = 0;
+$progressPct = 0;
+
+if (!$isAdmin) {
+  $placeholders = implode(',', array_fill(0, count($mainLabCodes), '?'));
+  $sql = "SELECT COUNT(DISTINCT lab_code) AS c
+          FROM user_progress
+          WHERE user_id = ? AND completed = 1 AND lab_code IN ($placeholders)";
+  $stmtP = mysqli_prepare($conn, $sql);
+  if ($stmtP) {
+    $types = 'i' . str_repeat('s', count($mainLabCodes));
+    $params = array_merge([$userId], $mainLabCodes);
+    $bind = [];
+    $bind[] = $types;
+    foreach ($params as $k => $v) $bind[] = &$params[$k];
+    call_user_func_array([$stmtP, 'bind_param'], $bind);
+
+    mysqli_stmt_execute($stmtP);
+    $r = mysqli_stmt_get_result($stmtP);
+    if ($r && ($row = mysqli_fetch_assoc($r))) {
+      $completedMain = (int)($row['c'] ?? 0);
+    }
+    mysqli_stmt_close($stmtP);
   }
+
+  $progressPct = (int)round(($completedMain / max(1, count($mainLabCodes))) * 100);
 }
-$percent = $total > 0 ? (int)round(($completedCount / $total) * 100) : 0;
+
+// --- Attempts aggregates ---
+$attemptsTotal = 0;
+$successTotal = 0;
+$lastAttemptAt = null;
+$lastSuccessAt = null;
+
+$stmtA = mysqli_prepare($conn, "SELECT attempts_total, success_total, last_attempt_at, last_success_at FROM attempts_agg_user WHERE user_id = ? LIMIT 1");
+if ($stmtA) {
+  mysqli_stmt_bind_param($stmtA, 'i', $userId);
+  mysqli_stmt_execute($stmtA);
+  $r = mysqli_stmt_get_result($stmtA);
+  if ($r && ($row = mysqli_fetch_assoc($r))) {
+    $attemptsTotal = (int)($row['attempts_total'] ?? 0);
+    $successTotal = (int)($row['success_total'] ?? 0);
+    $lastAttemptAt = $row['last_attempt_at'] ?? null;
+    $lastSuccessAt = $row['last_success_at'] ?? null;
+  }
+  mysqli_stmt_close($stmtA);
+}
+
+// --- Points (REAL) ---
+$points = points_get_user_points($conn, $userId);
 
 bs_layout_start('Профил');
 ?>
@@ -108,8 +109,12 @@ bs_layout_start('Профил');
 
           <div class="flex-grow-1">
             <div class="h6 fw-bold mb-0"><?php echo htmlspecialchars($fullName); ?></div>
-            <div class="small text-secondary"><?php echo htmlspecialchars($email); ?></div>
+            <div class="small text-secondary"><?php echo htmlspecialchars($email ?: '—'); ?></div>
           </div>
+
+          <span class="badge <?php echo $isAdmin ? 'text-bg-danger' : 'text-bg-secondary'; ?> rounded-pill">
+            <?php echo $isAdmin ? 'ADMIN' : 'USER'; ?>
+          </span>
         </div>
 
         <hr class="my-3">
@@ -119,10 +124,14 @@ bs_layout_start('Профил');
             <div class="text-secondary">Потребителско име</div>
             <div class="fw-semibold"><?php echo htmlspecialchars($username); ?></div>
           </div>
+          <div class="col-12 mt-2">
+            <div class="text-secondary">Роля</div>
+            <div class="fw-semibold"><?php echo htmlspecialchars($role); ?></div>
+          </div>
         </div>
 
         <div class="d-grid mt-3">
-          <a class="btn btn-outline-primary" href="/sqli-platform/public/edit_profile.php">
+          <a class="btn btn-outline-primary" href="<?php echo $base; ?>/public/edit_profile.php">
             Редакция на профил
           </a>
         </div>
@@ -133,23 +142,28 @@ bs_layout_start('Профил');
     <div class="card shadow-sm mt-3">
       <div class="card-body">
 
-        <div class="d-flex justify-content-between align-items-start">
-          <div>
-            <h2 class="h6 fw-bold mb-1">Напредък</h2>
-            <p class="small text-secondary mb-0">Общо завършени модули</p>
-          </div>
-          <span class="badge text-bg-primary rounded-pill">
-            <?php echo $completedCount; ?> / <?php echo $total; ?>
-          </span>
+        <h2 class="h6 fw-bold mb-3">Статистика</h2>
+
+        <div class="d-flex justify-content-between">
+          <span class="text-secondary small">Точки</span>
+          <span class="fw-semibold"><?php echo (int)$points; ?></span>
         </div>
 
-        <div class="progress mt-3" style="height: 14px;">
-          <div class="progress-bar" style="width: <?php echo $percent; ?>%"></div>
+        <div class="d-flex justify-content-between mt-1">
+          <span class="text-secondary small">Общо опити</span>
+          <span class="fw-semibold"><?php echo (int)$attemptsTotal; ?></span>
         </div>
 
-        <div class="d-flex justify-content-between small text-secondary mt-2">
-          <span><?php echo $percent; ?>% завършено</span>
-          <span><?php echo ($percent === 100) ? '✅ Готово' : '⏳ В процес'; ?></span>
+        <div class="d-flex justify-content-between mt-1">
+          <span class="text-secondary small">Успешни</span>
+          <span class="fw-semibold"><?php echo (int)$successTotal; ?></span>
+        </div>
+
+        <hr class="my-3">
+
+        <div class="small text-secondary">
+          Последен опит: <strong><?php echo $lastAttemptAt ? htmlspecialchars((string)$lastAttemptAt) : '—'; ?></strong><br>
+          Последен успех: <strong><?php echo $lastSuccessAt ? htmlspecialchars((string)$lastSuccessAt) : '—'; ?></strong>
         </div>
 
       </div>
@@ -160,8 +174,15 @@ bs_layout_start('Профил');
         <h2 class="h6 fw-bold mb-3">Бързи действия</h2>
 
         <div class="d-grid gap-2">
-          <a class="btn btn-brand" href="/sqli-platform/public/dashboard.php">Към таблото</a>
-          <a class="btn btn-outline-danger" href="/sqli-platform/public/logout.php">Изход</a>
+          <?php if ($isAdmin): ?>
+            <a class="btn btn-brand" href="<?php echo $base; ?>/public/admin/index.php">Към админ панела</a>
+            <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/admin/users.php">Потребители</a>
+            <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/admin/export.php">Експорт</a>
+          <?php else: ?>
+            <a class="btn btn-brand" href="<?php echo $base; ?>/public/dashboard.php">Към таблото</a>
+            <a class="btn btn-outline-secondary" href="<?php echo $base; ?>/public/ctf.php">CTF • Flags</a>
+          <?php endif; ?>
+          <a class="btn btn-outline-danger" href="<?php echo $base; ?>/public/logout.php">Изход</a>
         </div>
       </div>
     </div>
@@ -170,69 +191,90 @@ bs_layout_start('Профил');
 
   <div class="col-12 col-lg-8">
 
-    <div class="card shadow-sm">
-      <div class="card-body">
+    <?php if ($isAdmin): ?>
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h2 class="h5 fw-bold mb-1">Админ профил</h2>
+          <p class="text-secondary mb-3">
+            Като администратор нямаш уроци и упражнения. Тук виждаш профил и бързи линкове към статистики/експорт.
+          </p>
 
-        <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
-          <div>
-            <h2 class="h5 fw-bold mb-1">Модули</h2>
-            <p class="text-secondary mb-0">
-              Модулите се отключват последователно. Кликни върху достъпните.
-            </p>
+          <div class="row g-3">
+            <div class="col-12 col-md-4">
+              <div class="p-3 rounded-4 border bg-light h-100">
+                <div class="fw-semibold mb-1">Статистики</div>
+                <div class="text-secondary small mb-2">Общ преглед на активност и трудност.</div>
+                <a class="btn btn-sm btn-outline-secondary" href="<?php echo $base; ?>/public/admin/index.php">Отвори</a>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="p-3 rounded-4 border bg-light h-100">
+                <div class="fw-semibold mb-1">Потребители</div>
+                <div class="text-secondary small mb-2">Прогрес и детайли по потребител.</div>
+                <a class="btn btn-sm btn-outline-secondary" href="<?php echo $base; ?>/public/admin/users.php">Отвори</a>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="p-3 rounded-4 border bg-light h-100">
+                <div class="fw-semibold mb-1">Експорт</div>
+                <div class="text-secondary small mb-2">CSV по период + отчети.</div>
+                <a class="btn btn-sm btn-outline-secondary" href="<?php echo $base; ?>/public/admin/export.php">Отвори</a>
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <div class="alert alert-info rounded-4 mb-0">
+            <strong>Идея:</strong> после можем да добавим “Admin adjustments” за точки (ръчно +/–).
           </div>
         </div>
+      </div>
 
-        <div class="list-group mt-3">
+    <?php else: ?>
+      <div class="card shadow-sm">
+        <div class="card-body">
 
-          <?php foreach ($modules as $m): ?>
-            <?php
-              $done = !empty($progressMap[$m['code']]) && (int)$progressMap[$m['code']]['completed'] === 1;
-              $allowed = $accessMap[$m['code']];
-              $path = $modulePaths[$m['code']] ?? '#';
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <h2 class="h5 fw-bold mb-1">Твоят прогрес</h2>
+              <p class="text-secondary mb-0">
+                Завършени основни модули: <strong><?php echo (int)$completedMain; ?></strong> / <?php echo (int)count($mainLabCodes); ?>
+              </p>
+            </div>
+            <span class="badge text-bg-primary rounded-pill">
+              <?php echo (int)$progressPct; ?>%
+            </span>
+          </div>
 
-              if ($done) {
-                $badge = '<span class="badge text-bg-success rounded-pill">Завършен</span>';
-                $icon = '✅';
-              } elseif ($allowed) {
-                $badge = '<span class="badge text-bg-primary rounded-pill">Достъпен</span>';
-                $icon = '▶️';
-              } else {
-                $badge = '<span class="badge text-bg-secondary rounded-pill">Заключен</span>';
-                $icon = '🔒';
-              }
-            ?>
+          <div class="progress mt-3" style="height: 14px;">
+            <div class="progress-bar" style="width: <?php echo (int)$progressPct; ?>%"></div>
+          </div>
 
-            <?php if ($allowed): ?>
-              <a href="<?php echo htmlspecialchars($path); ?>"
-                 class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                <div class="d-flex align-items-center gap-2">
-                  <span><?php echo $icon; ?></span>
-                  <span>
-                    <strong><?php echo htmlspecialchars($m['label']); ?>:</strong>
-                    <?php echo htmlspecialchars($m['title']); ?>
-                  </span>
+          <div class="row g-3 mt-3">
+            <div class="col-12 col-md-6">
+              <div class="p-3 rounded-4 border bg-light h-100">
+                <div class="fw-semibold mb-1">Точки (CTF-style)</div>
+                <div class="text-secondary small">
+                  Текущи точки: <strong><?php echo (int)$points; ?></strong><br>
+                  Въвеждай флагове след решения.
                 </div>
-                <?php echo $badge; ?>
-              </a>
-            <?php else: ?>
-              <div class="list-group-item d-flex justify-content-between align-items-center text-muted">
-                <div class="d-flex align-items-center gap-2">
-                  <span><?php echo $icon; ?></span>
-                  <span>
-                    <strong><?php echo htmlspecialchars($m['label']); ?>:</strong>
-                    <?php echo htmlspecialchars($m['title']); ?>
-                  </span>
-                </div>
-                <?php echo $badge; ?>
+                <a class="btn btn-sm btn-outline-secondary mt-2" href="<?php echo $base; ?>/public/ctf.php">Отвори CTF</a>
               </div>
-            <?php endif; ?>
-
-          <?php endforeach; ?>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="p-3 rounded-4 border bg-light h-100">
+                <div class="fw-semibold mb-1">Badges – coming soon</div>
+                <div class="text-secondary small">
+                  “First blood”, “No hints”, “Streak”, “Time-based master”.
+                </div>
+              </div>
+            </div>
+          </div>
 
         </div>
-
       </div>
-    </div>
+    <?php endif; ?>
 
   </div>
 
